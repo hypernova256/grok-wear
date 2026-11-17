@@ -638,7 +638,17 @@ final class BotAccount {
     private JSONObject coreRequest(JSONObject config,String method,JSONObject body) throws Exception {
         switch(method){
             case "listAgents":{
-                JSONObject box=gateway(config,method,body);
+                JSONObject box;
+                try{box=gateway(config,method,body);}
+                catch(GrokCore.Failure refused){
+                    // A gateway that has moved on (401/404/417) must not hide the Bots Grok's server lists:
+                    // an account whose Bots all run there may have no working sandbox gateway at all.
+                    if(!GrokCore.staleGateway(refused))throw refused;
+                    JSONArray server;
+                    try{server=serverRoster();}catch(Exception unavailable){throw refused;}
+                    android.util.Log.i("GrokWearServer","roster from server only: gateway HTTP "+refused.status);
+                    return mergeRoster(new JSONObject().put("agents",new JSONArray()),server);
+                }
                 // Report a problem's timings describe the gateway list, not the server's.
                 long[] transfer=LAST_TRANSFER.get().clone();
                 try{return withServerRoster(box);}finally{LAST_TRANSFER.set(transfer);}
@@ -663,6 +673,9 @@ final class BotAccount {
         JSONArray server;
         try{server=serverRoster();}
         catch(Exception unavailable){android.util.Log.i("GrokWearServer","roster from gateway only: "+unavailable.getClass().getSimpleName());return box;}
+        return mergeRoster(box,server);
+    }
+    private JSONObject mergeRoster(JSONObject box,JSONArray server) throws Exception {
         JSONArray boxRows=box.optJSONArray("agents");if(boxRows==null)boxRows=new JSONArray();
         java.util.Map<String,JSONObject> byId=new java.util.HashMap<>();
         for(int i=0;i<boxRows.length();i++){JSONObject b=boxRows.optJSONObject(i);String id=rowId(b);if(!id.isEmpty())byId.put(id,b);}
@@ -672,7 +685,7 @@ final class BotAccount {
             JSONObject row=server.optJSONObject(i);String id=GrokCore.text(row,"agentId");if(id.isEmpty())id=GrokCore.text(row,"legacyAgentId");
             if(id.isEmpty()||!listed.add(id))continue;
             JSONObject b=byId.get(id);
-            if(!GrokCore.SERVER_HARNESS.equals(GrokCore.text(row,"harness"))){merged.put(b!=null?b:row);continue;}
+            if(!GrokCore.SERVER_HARNESS.equals(GrokCore.text(row,"harness"))){merged.put(b!=null?b:new JSONObject(row.toString()).put("id",id));continue;}
             JSONObject mine=new JSONObject(row.toString()).put("id",id);
             if(b!=null)for(String key:GATEWAY_EXTRAS)if(b.has(key)&&!mine.has(key))mine.put(key,b.get(key));
             merged.put(SERVER_STATES.over(mine,now));
