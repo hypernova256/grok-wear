@@ -284,6 +284,12 @@ public final class MainActivity extends Activity {
     }
     private int dp(float value){return Math.round(value*getResources().getDisplayMetrics().density);}
     private GradientDrawable shape(int color,float radius){GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(dp(radius));return d;}
+    /** Single-line labels and buttons stay one line with their "…", but no longer claim sideways swipes. */
+    static void noSideScroll(View view){
+        if(view instanceof android.widget.EditText)return;
+        if(view instanceof TextView){TextView t=(TextView)view;if(t.canScrollHorizontally(1)||t.canScrollHorizontally(-1))t.setHorizontallyScrolling(false);return;}
+        if(view instanceof android.view.ViewGroup){android.view.ViewGroup g=(android.view.ViewGroup)view;for(int i=0;i<g.getChildCount();i++)noSideScroll(g.getChildAt(i));}
+    }
     private void render(){
         syncCallVolume();
         // Re-rendering the same screen (history refresh, sync status) keeps the reader's place.
@@ -293,6 +299,9 @@ public final class MainActivity extends Activity {
         if(!chat.equals(openChat)){openChat=chat;if(!chat.isEmpty())ReplyAlertService.dismiss(this,chat);}
         for(BotAvatarView face:avatars)face.running(false);avatars.clear();orb=null;if(waveform!=null)waveform.running(false);waveform=null;volumeArc=null;transcriptBody=null;callStatus=null;main.removeCallbacks(callClock);
         root=new FrameLayout(this);root.setBackgroundColor(Color.BLACK);setContentView(root);
+        // Wear OS swipe-to-dismiss gives way to any view that can scroll sideways, and single-line text counts:
+        // without this, a swipe across a name, an excerpt or a button never goes back.
+        final FrameLayout laidOut=root;root.getViewTreeObserver().addOnGlobalLayoutListener(()->noSideScroll(laidOut));
         TextView top=text(preview&&!previewMedia?"UI preview":"",10,SECONDARY);top.setLetterSpacing(.08f);
         FrameLayout.LayoutParams tp=new FrameLayout.LayoutParams(-1,dp(18),Gravity.TOP|Gravity.CENTER_HORIZONTAL);tp.topMargin=dp(9);root.addView(top,tp);if(!preview||screen.equals("ready")||screen.equals("done")||isCall())top.setVisibility(View.GONE);
         ScrollView scroll=new ScrollView(this);currentScroll=scroll;scroll.setFocusable(true);scroll.setFocusableInTouchMode(true);scroll.requestFocus();scroll.setFillViewport(true);scroll.setClipToPadding(false);scroll.setVerticalScrollBarEnabled(false);
