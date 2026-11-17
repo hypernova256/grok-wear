@@ -283,6 +283,39 @@ public final class MainActivity extends Activity {
         render();
     }
     private int dp(float value){return Math.round(value*getResources().getDisplayMetrics().density);}
+    // The bottom "edge button" (Talk, Send…), as Wear OS draws it: its bottom follows the round screen a few dp
+    // inside the bezel, and the page scrolls on behind it to the edge instead of stopping at a line above it.
+    static final float EDGE_W=.68f;static final int EDGE_H=56,EDGE_GAP=4,EDGE_SPACE=67;
+    private FrameLayout.LayoutParams edgeParams(){FrameLayout.LayoutParams ep=new FrameLayout.LayoutParams(dp(side*EDGE_W),dp(EDGE_H),Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL);ep.bottomMargin=dp(EDGE_GAP);return ep;}
+    private android.graphics.drawable.Drawable edgeShape(int color){
+        if(!getResources().getConfiguration().isScreenRound())return shape(color,28);
+        return new EdgeShape(color,dp(24),dp(EDGE_GAP),getResources().getDisplayMetrics().widthPixels/2f);
+    }
+    /** Lets the page scroll to the screen's edge, fading out behind the edge button. Call before adding the button. */
+    private void scrollBehindEdge(){
+        FrameLayout.LayoutParams sp=(FrameLayout.LayoutParams)currentScroll.getLayoutParams();sp.bottomMargin=0;currentScroll.setLayoutParams(sp);
+        body.setPadding(body.getPaddingLeft(),body.getPaddingTop(),body.getPaddingRight(),body.getPaddingBottom()+dp(EDGE_SPACE));
+        View scrim=new View(this);scrim.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,new int[]{0x00000000,0xd9000000,0xff000000}));
+        scrim.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);root.addView(scrim,new FrameLayout.LayoutParams(-1,dp(EDGE_SPACE+20),Gravity.BOTTOM));
+    }
+    /** A rounded top over an arc of the screen's own circle, inset by gap: the bottom hugs a round display. */
+    static final class EdgeShape extends android.graphics.drawable.Drawable{
+        private final android.graphics.Paint paint=new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);private final android.graphics.Path path=new android.graphics.Path();
+        private final float corner,gap,radius;
+        EdgeShape(int color,float corner,float gap,float radius){paint.setColor(color);this.corner=corner;this.gap=gap;this.radius=radius;}
+        @Override protected void onBoundsChange(android.graphics.Rect b){
+            path.reset();float w=b.width(),h=b.height();
+            android.graphics.Path top=new android.graphics.Path();top.addRoundRect(new android.graphics.RectF(b.left,b.top,b.right,b.top+h*3),corner,corner,android.graphics.Path.Direction.CW);
+            // The screen's centre, seen from this button: centred across, (radius - gap - h) above its top.
+            android.graphics.Path circle=new android.graphics.Path();circle.addCircle(b.left+w/2f,b.top+h+gap-radius,radius-gap,android.graphics.Path.Direction.CW);
+            path.op(top,circle,android.graphics.Path.Op.INTERSECT);
+        }
+        @Override public void draw(android.graphics.Canvas canvas){canvas.drawPath(path,paint);}
+        @Override public void setAlpha(int alpha){paint.setAlpha(alpha);invalidateSelf();}
+        @Override public void setColorFilter(android.graphics.ColorFilter filter){paint.setColorFilter(filter);invalidateSelf();}
+        @Override public int getOpacity(){return android.graphics.PixelFormat.TRANSLUCENT;}
+        @Override public void getOutline(android.graphics.Outline outline){if(android.os.Build.VERSION.SDK_INT>=30)outline.setPath(path);}
+    }
     private GradientDrawable shape(int color,float radius){GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(dp(radius));return d;}
     /** Single-line labels and buttons stay one line with their "…", but no longer claim sideways swipes. */
     static void noSideScroll(View view){
@@ -305,8 +338,9 @@ public final class MainActivity extends Activity {
         TextView top=text(preview&&!previewMedia?"UI preview":"",10,SECONDARY);top.setLetterSpacing(.08f);
         FrameLayout.LayoutParams tp=new FrameLayout.LayoutParams(-1,dp(18),Gravity.TOP|Gravity.CENTER_HORIZONTAL);tp.topMargin=dp(9);root.addView(top,tp);if(!preview||screen.equals("ready")||screen.equals("done")||isCall())top.setVisibility(View.GONE);
         ScrollView scroll=new ScrollView(this);currentScroll=scroll;scroll.setFocusable(true);scroll.setFocusableInTouchMode(true);scroll.requestFocus();scroll.setFillViewport(true);scroll.setClipToPadding(false);scroll.setVerticalScrollBarEnabled(false);
-        FrameLayout.LayoutParams sp=new FrameLayout.LayoutParams(-1,-1);sp.topMargin=dp(isCall()?(preview?27:19):23);sp.bottomMargin=dp(isCall()?side*.12f+50:screen.equals("bots")?9:screen.equals("done")?12:30);root.addView(scroll,sp);
-        body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);body.setGravity(Gravity.CENTER_HORIZONTAL);body.setPadding(dp(side*.12f),dp(isCall()||screen.equals("ready")?0:3),dp(side*.12f),dp(isCall()?0:screen.equals("bots")||screen.equals("done")?12:58));scroll.addView(body,new ScrollView.LayoutParams(-1,-2));
+        FrameLayout.LayoutParams sp=new FrameLayout.LayoutParams(-1,-1);sp.topMargin=dp(isCall()?(preview?27:19):23);// Pages scroll all the way to the round edge; the gap a hard bottom margin left becomes padding inside the page.
+        int edgeRoom=isCall()?0:dp(screen.equals("bots")?9:screen.equals("done")?12:30);sp.bottomMargin=isCall()?dp(side*.12f+50):0;root.addView(scroll,sp);
+        body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);body.setGravity(Gravity.CENTER_HORIZONTAL);body.setPadding(dp(side*.12f),dp(isCall()||screen.equals("ready")?0:3),dp(side*.12f),dp(isCall()?0:screen.equals("bots")||screen.equals("done")?12:58)+edgeRoom);scroll.addView(body,new ScrollView.LayoutParams(-1,-2));
         if(isCall()){call();return;}
         // After sending, and when the Bot's reply lands, show the newest message rather than the top of the page:
         // the end of the chat, or its start when the newest comes first.
@@ -392,7 +426,7 @@ public final class MainActivity extends Activity {
     private boolean compactHero(){return side<200;}
     private JSONObject previewBot(String name,String message,boolean unread){try{return new JSONObject().put("id","preview-"+name.toLowerCase(java.util.Locale.ROOT).replace(' ','-')).put("name",name).put("lastMessagePreview",message).put("hasUnread",unread).put("isRunning",!unread);}catch(Exception impossible){return new JSONObject();}}
     private void styleTalk(Button talk){styleTalk(talk,"Talk");}
-    private void styleTalk(Button talk,String label){talk.setText(label);talk.setTextSize(label.equals("Talk")?15:12);talk.setCompoundDrawablesWithIntrinsicBounds(new VoiceGlyph(),null,null,null);talk.setCompoundDrawablePadding(dp(6));talk.setSingleLine(true);talk.setEllipsize(android.text.TextUtils.TruncateAt.END);int inset=Math.max(dp(8),(dp(side*.62f)-dp(26)-dp(8)-(int)Math.ceil(talk.getPaint().measureText(label)))/2);talk.setPadding(inset,dp(6),inset,dp(6));}
+    private void styleTalk(Button talk,String label){talk.setText(label);talk.setTextSize(label.equals("Talk")?15:12);talk.setCompoundDrawablesWithIntrinsicBounds(new VoiceGlyph(),null,null,null);talk.setCompoundDrawablePadding(dp(6));talk.setSingleLine(true);talk.setEllipsize(android.text.TextUtils.TruncateAt.END);int inset=Math.max(dp(8),(dp(side*EDGE_W)-dp(26)-dp(8)-(int)Math.ceil(talk.getPaint().measureText(label)))/2);talk.setPadding(inset,dp(6),inset,dp(6));}
     private void styleHomeTalk(Button talk,String name){
         talk.setText("Talk to\n"+name);talk.setTextSize(12);talk.setSingleLine(false);talk.setMaxLines(2);talk.setEllipsize(android.text.TextUtils.TruncateAt.END);talk.setPadding(dp(8),dp(4),dp(8),dp(4));
         talk.setCompoundDrawables(null,null,null,null);talk.setContentDescription("Talk to "+name);
@@ -413,17 +447,14 @@ public final class MainActivity extends Activity {
     private void botList(){
         JSONObject primary=primaryBot();java.util.List<JSONObject> pinned=pinnedBots(primary);
         if(!pinned.isEmpty())markPinHintDone();
-        if(primary!=null){FrameLayout.LayoutParams scroll=(FrameLayout.LayoutParams)currentScroll.getLayoutParams();scroll.topMargin=0;scroll.bottomMargin=dp(67);currentScroll.setLayoutParams(scroll);body.setPadding(0,0,0,dp(24));FrameLayout hero=new FrameLayout(this);body.addView(hero,new LinearLayout.LayoutParams(-1,dp(side-67)));
+        if(primary!=null){FrameLayout.LayoutParams scroll=(FrameLayout.LayoutParams)currentScroll.getLayoutParams();scroll.topMargin=0;currentScroll.setLayoutParams(scroll);body.setPadding(0,0,0,dp(24));scrollBehindEdge();FrameLayout hero=new FrameLayout(this);body.addView(hero,new LinearLayout.LayoutParams(-1,dp(side-67)));
             // With no pins yet, the hero moves up to make room for one hint line.
             boolean hint=pinned.isEmpty()&&!pinHintDone()&&(preview||botsCached);int lift=hint?18:0;
             BotAvatarView face=new BotAvatarView(this);applyAvatar(face,primary.optString("name"),primary);face.state("ready",WHITE,0);face.running(visible);avatars.add(face);face.setContentDescription(primary.optString("name")+", Primary Bot"+(primary.optBoolean("awaiting")?", needs you":"")+". Open chat");face.setOnClickListener(v->{navigation++;primaryAction(primary,false);});int faceSize=compactHero()?48:64;FrameLayout.LayoutParams fp=new FrameLayout.LayoutParams(dp(faceSize),dp(faceSize),Gravity.TOP|Gravity.CENTER_HORIZONTAL);fp.topMargin=dp((compactHero()?30:side*.34f-32)-lift);hero.addView(face,fp);
             TextView star=text("★",16,WHITE);GradientDrawable badge=shape(0xffff9800,12);badge.setStroke(dp(2),Color.BLACK);star.setBackground(badge);star.setContentDescription("Primary Bot");FrameLayout.LayoutParams st=new FrameLayout.LayoutParams(dp(23),dp(23),Gravity.TOP|Gravity.CENTER_HORIZONTAL);st.leftMargin=dp(22);st.topMargin=fp.topMargin+dp(faceSize-21);hero.addView(star,st);
             TextView name=text(primary.optString("name"),getResources().getConfiguration().fontScale>1.2f?12:16,WHITE);name.setSingleLine(true);name.setEllipsize(android.text.TextUtils.TruncateAt.END);FrameLayout.LayoutParams np=new FrameLayout.LayoutParams(dp(side*.76f),dp(22),Gravity.TOP|Gravity.CENTER_HORIZONTAL);np.topMargin=dp((compactHero()?80:side*.535f-11)-lift);hero.addView(name,np);TextView sub=text(MessageText.plain(primary.optString("lastMessagePreview","Ready to talk")),compactHero()?11:12,SECONDARY);sub.setTag("bot_excerpt");if(primary.optBoolean("awaiting")){sub.setText(needsYou(MessageText.plain(primary.optString("lastMessagePreview",""))));sub.setTag("bot_status");}sub.setSingleLine(true);sub.setEllipsize(android.text.TextUtils.TruncateAt.END);FrameLayout.LayoutParams xp=new FrameLayout.LayoutParams(dp(side*.76f),dp(20),Gravity.TOP|Gravity.CENTER_HORIZONTAL);xp.topMargin=dp(Math.min(side-88,side*.615f-10)-lift);hero.addView(sub,xp);
             if(hint){TextView line=text("Hold a Bot to pin it",12,SECONDARY);line.setCompoundDrawablesRelativeWithIntrinsicBounds(new PinGlyph(SECONDARY,12,false,false),null,null,null);line.setCompoundDrawablePadding(dp(4));FrameLayout.LayoutParams hp=new FrameLayout.LayoutParams(-2,dp(18),Gravity.TOP|Gravity.CENTER_HORIZONTAL);hp.topMargin=xp.topMargin+dp(22);hero.addView(line,hp);}
-            Button talk=button("Talk to "+primary.optString("name","your Primary Bot"),()->primaryAction(primary,true));styleHomeTalk(talk,primary.optString("name","your Primary Bot"));talk.setTag("home_primary_talk");talk.setTextColor(Color.BLACK);talk.setBackground(shape(WHITE,28));talk.setEnabled(!historyStaging()&&!botSelectionPending);FrameLayout.LayoutParams ep=new FrameLayout.LayoutParams(dp(side*.62f),dp(54),Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL);ep.bottomMargin=dp(12);root.addView(talk,ep);
-            View fade=new View(this);fade.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,new int[]{0x00000000,0xff000000}));FrameLayout.LayoutParams fl=new FrameLayout.LayoutParams(-1,dp(18),Gravity.BOTTOM);fl.bottomMargin=dp(67);root.addView(fade,fl);
-            // The fade appears once the list scrolls, so it never dims the hero at rest.
-            final ScrollView home=currentScroll;fade.setAlpha(0);home.getViewTreeObserver().addOnScrollChangedListener(()->fade.setAlpha(Math.min(1f,home.getScrollY()/(float)dp(24))));
+            Button talk=button("Talk to "+primary.optString("name","your Primary Bot"),()->primaryAction(primary,true));styleHomeTalk(talk,primary.optString("name","your Primary Bot"));talk.setTag("home_primary_talk");talk.setTextColor(Color.BLACK);talk.setBackground(edgeShape(WHITE));talk.setEnabled(!historyStaging()&&!botSelectionPending);FrameLayout.LayoutParams ep=edgeParams();root.addView(talk,ep);
             LinearLayout list=new LinearLayout(this);list.setOrientation(LinearLayout.VERTICAL);list.setPadding(dp(side*.12f),dp(10),dp(side*.12f),0);body.addView(list,new LinearLayout.LayoutParams(-1,-2));body=list;
             if(!pinned.isEmpty())pinnedGrid(pinned);
             // Every other Bot pinned: no empty "Bots" header. With desktop sections, each section has its own.
@@ -712,12 +743,12 @@ public final class MainActivity extends Activity {
     private boolean hasCurrentReceipt(){return !receiptIdentity.isEmpty()&&receiptIdentity.equals(currentConversationIdentity());}
     private boolean takeOwnHistoryRefresh(boolean active,boolean staging){if(active||staging||historyLoading||!receiptRefreshPending||!screen.equals("ready")||!hasCurrentReceipt())return false;receiptRefreshPending=false;return true;}
     private void edgeTalk(){
-        Button talk=button("Start voice chat",()->talk());styleTalk(talk);talk.setTextColor(Color.BLACK);talk.setBackground(shape(WHITE,28));talk.setEnabled(!historyStaging()&&!botSelectionPending);
-        FrameLayout.LayoutParams ep=new FrameLayout.LayoutParams(dp(side*.62f),dp(54),Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL);ep.bottomMargin=dp(12);root.addView(talk,ep);
+        Button talk=button("Start voice chat",()->talk());styleTalk(talk);talk.setTextColor(Color.BLACK);talk.setBackground(edgeShape(WHITE));talk.setEnabled(!historyStaging()&&!botSelectionPending);
+        FrameLayout.LayoutParams ep=edgeParams();root.addView(talk,ep);
     }
     private void ready(){
         callTimers.clear();questionTimers.clear();main.removeCallbacks(callTimer);main.removeCallbacks(questionReveal);
-        FrameLayout.LayoutParams sp=(FrameLayout.LayoutParams)currentScroll.getLayoutParams();sp.topMargin=0;sp.bottomMargin=dp(67);currentScroll.setLayoutParams(sp);body.setPadding(0,0,0,dp(28));
+        FrameLayout.LayoutParams sp=(FrameLayout.LayoutParams)currentScroll.getLayoutParams();sp.topMargin=0;currentScroll.setLayoutParams(sp);body.setPadding(0,0,0,dp(28));scrollBehindEdge();
         // A Bot other than the Primary gets a compact hero with its pin control under the name.
         JSONObject pinBot=currentPinBot();View[] pin=pinBot==null?null:pinViews(pinBot,false);boolean caption=pin!=null&&pin[0]!=null;
         FrameLayout hero=new FrameLayout(this);hero.setMinimumHeight(dp(side-67));body.addView(hero,new LinearLayout.LayoutParams(-1,pin==null?dp(side-67):-2));
@@ -800,12 +831,12 @@ public final class MainActivity extends Activity {
     }
     /** A big white button pinned above the bottom edge, like Talk, so it can never scroll off the round screen. */
     private Button pinnedAction(String value,android.graphics.drawable.Drawable icon,Runnable action){
-        FrameLayout.LayoutParams sp=(FrameLayout.LayoutParams)currentScroll.getLayoutParams();sp.topMargin=0;sp.bottomMargin=dp(67);currentScroll.setLayoutParams(sp);
-        Button b=button(value,action);b.setTextColor(Color.BLACK);b.setBackground(shape(WHITE,28));b.setTextSize(16);
+        FrameLayout.LayoutParams sp=(FrameLayout.LayoutParams)currentScroll.getLayoutParams();sp.topMargin=0;currentScroll.setLayoutParams(sp);scrollBehindEdge();
+        Button b=button(value,action);b.setTextColor(Color.BLACK);b.setBackground(edgeShape(WHITE));b.setTextSize(16);
         if(icon!=null){b.setCompoundDrawablesRelativeWithIntrinsicBounds(icon,null,null,null);b.setCompoundDrawablePadding(dp(8));
             // Centres the icon and label together.
-            int inset=Math.max(dp(8),(dp(side*.62f)-icon.getIntrinsicWidth()-dp(8)-(int)Math.ceil(b.getPaint().measureText(value)))/2);b.setPadding(inset,dp(6),inset,dp(6));}
-        FrameLayout.LayoutParams ep=new FrameLayout.LayoutParams(dp(side*.62f),dp(54),Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL);ep.bottomMargin=dp(12);root.addView(b,ep);bottomAction=true;
+            int inset=Math.max(dp(8),(dp(side*EDGE_W)-icon.getIntrinsicWidth()-dp(8)-(int)Math.ceil(b.getPaint().measureText(value)))/2);b.setPadding(inset,dp(6),inset,dp(6));}
+        FrameLayout.LayoutParams ep=edgeParams();root.addView(b,ep);bottomAction=true;
         return b;
     }
     /** Fix the text with the watch keyboard (dictation from the keyboard works too). */
@@ -1406,9 +1437,9 @@ public final class MainActivity extends Activity {
         this.action("Back",()->goHome());edgeAction(action,run);}
     /** Primary action pinned above the bottom edge, like Talk: it can never scroll off a round screen. */
     private void edgeAction(String value,Runnable run){
-        bottomAction=true;FrameLayout.LayoutParams sp=(FrameLayout.LayoutParams)currentScroll.getLayoutParams();sp.bottomMargin=dp(67);currentScroll.setLayoutParams(sp);
-        Button primary=button(value,run);primary.setTextColor(Color.BLACK);primary.setBackground(shape(WHITE,28));
-        FrameLayout.LayoutParams ep=new FrameLayout.LayoutParams(dp(side*.62f),dp(54),Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL);ep.bottomMargin=dp(12);root.addView(primary,ep);
+        bottomAction=true;scrollBehindEdge();
+        Button primary=button(value,run);primary.setTextColor(Color.BLACK);primary.setBackground(edgeShape(WHITE));
+        FrameLayout.LayoutParams ep=edgeParams();root.addView(primary,ep);
     }
     /** Real calls retry Talk directly; demo previews return to the Bot page. */
     private void talkAgain(){safeError="";screen="ready";render();if(!preview)talk();}
