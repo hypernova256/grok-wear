@@ -67,6 +67,9 @@ final class NativeAudio implements AutoCloseable {
         catch(RuntimeException unknown){return new int[0];}
     }
     private volatile long framesWritten,framesQueued; private boolean hadOutput;
+    /** Settings → Silent replies: captions only, the Bot's voice muted on the watch. */
+    static boolean silentReplies(Context context){try{return context.getSharedPreferences("grokwear_ui",Context.MODE_PRIVATE).getBoolean("silent_replies",false);}catch(RuntimeException unavailable){return false;}}
+    static void setSilentReplies(Context context,boolean on){try{context.getSharedPreferences("grokwear_ui",Context.MODE_PRIVATE).edit().putBoolean("silent_replies",on).apply();}catch(RuntimeException ignored){}}
     NativeAudio(Context context,Listener listener){this.context=context.getApplicationContext();this.manager=(AudioManager)context.getSystemService(Context.AUDIO_SERVICE);this.listener=listener;}
     void start(boolean initiallyMuted) {
         synchronized(this){userMuted=initiallyMuted;}captureGate.mute(initiallyMuted);
@@ -101,6 +104,9 @@ final class NativeAudio implements AutoCloseable {
             AudioAttributes voice=media?new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build():attributes;
             track=new AudioTrack.Builder().setAudioAttributes(voice).setAudioFormat(format).setTransferMode(AudioTrack.MODE_STREAM).setBufferSizeInBytes(out).build();
             if(track.getState()!=AudioTrack.STATE_INITIALIZED)throw new IllegalStateException();
+            // Silent replies (Settings): the Bot's voice still streams and plays, so turn-taking and what Grok
+            // thinks you heard stay right, but at zero volume; the call shows its captions instead.
+            if(silentReplies(context)){track.setVolume(0f);android.util.Log.i("GrokWearAudio","voice_output=silent");}
             int in=Math.max(FRAME*4,AudioRecord.getMinBufferSize(RATE,AudioFormat.CHANNEL_IN_MONO,AudioFormat.ENCODING_PCM_16BIT));
             record=new AudioRecord.Builder().setAudioSource(MediaRecorder.AudioSource.VOICE_COMMUNICATION)
                 .setAudioFormat(new AudioFormat.Builder().setEncoding(AudioFormat.ENCODING_PCM_16BIT).setSampleRate(RATE).setChannelMask(AudioFormat.CHANNEL_IN_MONO).build())

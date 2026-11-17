@@ -1648,6 +1648,9 @@ public final class MainActivity extends Activity {
         boolean newest=newestFirst();
         Button order=action("Newest first: "+(newest?"On":"Off"),()->{setNewestFirst(!newest);render();});order.setContentDescription("Newest messages first, "+(newest?"on":"off")+". Double-tap to turn "+(newest?"off":"on"));
         label(newest?"A Bot’s chat starts with its newest message.":"A Bot’s chat ends with its newest message.",12,SECONDARY);gap(8);
+        boolean silent=NativeAudio.silentReplies(this);
+        Button quiet=action("Silent replies: "+(silent?"On":"Off"),()->{NativeAudio.setSilentReplies(this,!silent);render();});quiet.setContentDescription("Silent replies, "+(silent?"on":"off")+". Double-tap to turn "+(silent?"off":"on"));
+        label(silent?"Calls show the Bot’s replies as text. Its voice stays muted. Starts with your next call.":"The Bot speaks its replies on calls.",12,SECONDARY);gap(8);
         boolean button=buttonOn();
         Button hold=action("Assistant button: "+(button?"On":"Off"),()->toggleButton());hold.setContentDescription("Assistant button, "+(button?"on":"off")+". Double-tap to open the watch’s assistant settings");
         String target=assistTarget(preview?null:primaryBot());
