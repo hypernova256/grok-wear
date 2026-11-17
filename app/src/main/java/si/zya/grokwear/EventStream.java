@@ -31,6 +31,10 @@ final class EventStream {
     // Leaving the app for the message picker or a permission dialog shouldn't drop and redial the stream.
     private static final long LINGER_MS=20000;
     private static final long[] BACKOFF={1000,2000,5000,10000,30000,60000};
+    // A gateway answering 404 again and again has no event stream (say, an account whose Bots all run on
+    // Grok's server): stop dialling it for a while instead of redialling, and re-bootstrapping, on every kick.
+    private static final int GONE_AFTER=3;private static final long GONE_MS=10*60_000L;
+    private static volatile boolean recheck;
     private static final Set<Listener> LISTENERS=new CopyOnWriteArraySet<>();
     private static final Handler MAIN=new Handler(Looper.getMainLooper());
     private static final Object WAKE=new Object();
@@ -54,7 +58,7 @@ final class EventStream {
         if(LISTENERS.isEmpty()){MAIN.removeCallbacks(idleStop);MAIN.postDelayed(idleStop,LINGER_MS);}
     }
     /** The account changed (say, signed out): drop this connection; the next attempt reads the new state. */
-    static void restart(){okhttp3.Call call=live;if(call!=null)call.cancel();kick();ServerEvents.restart();UsageTrays.ALL.clear();}
+    static void restart(){recheck=true;okhttp3.Call call=live;if(call!=null)call.cancel();kick();ServerEvents.restart();UsageTrays.ALL.clear();}
     static Set<Listener> listeners(){return LISTENERS;}
     /** The app's account is this one: a stream still on another (signed out, then in again) starts over. */
     static void expect(String identity){String now=identityNow;if(!now.isEmpty()&&!now.equals(identity))restart();}
@@ -74,7 +78,7 @@ final class EventStream {
     private static synchronized void release(long mine,okhttp3.Call call){if(call!=null&&live==call)live=null;if(current(mine))open=false;}
 
     private static void run(long mine){
-        BotAccount account=new BotAccount(app);int[] failures={0};boolean[] before={false};String[] identity={""};
+        BotAccount account=new BotAccount(app);int[] failures={0},gone={0};boolean[] before={false};String[] identity={""};
         while(current(mine)){
             // Nobody listens (the linger after the app left the screen): don't dial; a new listener kicks.
             if(LISTENERS.isEmpty()){pause(LINGER_MS);continue;}
@@ -114,6 +118,14 @@ final class EventStream {
             boolean stopping=!current(mine);
             android.util.Log.i("GrokWearEvents","events_end after_ms="+(SystemClock.elapsedRealtime()-began)+" cause="+(stopping?"stopped":ended));
             if(stopping)return;
+            gone[0]="refused_404".equals(ended)?gone[0]+1:0;
+            if(gone[0]>=GONE_AFTER){
+                // Only an account change (restart) or the stream stopping ends this wait early.
+                android.util.Log.i("GrokWearEvents","events_gateway_gone pause_ms="+GONE_MS);
+                long until=SystemClock.elapsedRealtime()+GONE_MS;recheck=false;
+                while(current(mine)&&!recheck){long left=until-SystemClock.elapsedRealtime();if(left<=0)break;pause(left);}
+                gone[0]=0;failures[0]=0;continue;
+            }
             if(SystemClock.elapsedRealtime()-began>60000)failures[0]=0;
             pause(BACKOFF[Math.min(failures[0]++,BACKOFF.length-1)]);
         }
