@@ -417,8 +417,8 @@ public final class MainActivity extends Activity {
             final ScrollView home=currentScroll;fade.setAlpha(0);home.getViewTreeObserver().addOnScrollChangedListener(()->fade.setAlpha(Math.min(1f,home.getScrollY()/(float)dp(24))));
             LinearLayout list=new LinearLayout(this);list.setOrientation(LinearLayout.VERTICAL);list.setPadding(dp(side*.12f),dp(10),dp(side*.12f),0);body.addView(list,new LinearLayout.LayoutParams(-1,-2));body=list;
             if(!pinned.isEmpty())pinnedGrid(pinned);
-            // Every other Bot pinned: no empty "Bots" header.
-            if(pinned.isEmpty()||bots.length()-1>pinned.size())label("Bots",17,WHITE);
+            // Every other Bot pinned: no empty "Bots" header. With desktop sections, each section has its own.
+            if((pinned.isEmpty()||bots.length()-1>pinned.size())&&sectionGroups(primary,pinned)==null)label("Bots",17,WHITE);
         }else{TextView title=label("Bots",17,WHITE);title.setTypeface(font(600));
             if(pickToCall)label("Choose a Bot to call",12,WHITE);
             else if(!preview&&preferencesKnown&&bots.length()>0)label("No main Bot. Choose one in the Grok Bot app on your phone.",12,SECONDARY);
@@ -428,7 +428,10 @@ public final class MainActivity extends Activity {
         if(botsLoading&&!botsCached){loadingLine=label(loadingText(),12,SECONDARY);main.removeCallbacks(loadingTick);main.postDelayed(loadingTick,1000);}if(botSelectionPending)label("Switching Bot…",12,SECONDARY);
         if(bots.length()==0&&!botsCached&&!selectedMetadata.optString("id","").isEmpty())botChip(botName,BLUE,()->chooseBot(selectedMetadata.optString("id")),selectedMetadata);
         else{java.util.HashSet<String> shown=new java.util.HashSet<>();for(JSONObject bot:pinned)shown.add(bot.optString("id"));
-            for(JSONObject bot:orderedBots()){if(primary!=null&&primary.optString("id").equals(bot.optString("id")))continue;if(shown.contains(bot.optString("id")))continue;String name=bot.optString("name","Unnamed Bot");botChip(name,BLUE,()->primaryAction(bot,pickToCall),bot);}}
+            java.util.List<Object[]> groups=sectionGroups(primary,pinned);
+            if(groups!=null){for(Object[] group:groups){sectionHeading((String)group[0]);@SuppressWarnings("unchecked") java.util.List<JSONObject> members=(java.util.List<JSONObject>)group[1];
+                for(JSONObject bot:members)botChip(bot.optString("name","Unnamed Bot"),BLUE,()->primaryAction(bot,pickToCall),bot);}}
+            else for(JSONObject bot:orderedBots()){if(primary!=null&&primary.optString("id").equals(bot.optString("id")))continue;if(shown.contains(bot.optString("id")))continue;String name=bot.optString("name","Unnamed Bot");botChip(name,BLUE,()->primaryAction(bot,pickToCall),bot);}}
         if(!botListError.isEmpty())label(botListError,12,SECONDARY);if(botsCached||!botsLoading){if(bots.length()==0&&botListError.isEmpty())label("No Bots found",14,SECONDARY);
             // A refresh of a saved list shows that it's running and when the list last arrived, even when nothing changed.
             if(botsCached&&botsLoading){Button busy=action("Refreshing…",()->{});busy.setEnabled(false);}else action(botsCached?"Refresh":"Try again",()->loadBots());
@@ -436,6 +439,29 @@ public final class MainActivity extends Activity {
         if(!preview&&!botListError.isEmpty()){action("Report a problem",()->openReport("Bot list: "+botListError,"bots"));action("Details",()->{screen="bot_details";render();});}
         action("Settings",()->openSettings());
     }
+    /**
+     * The Bot list grouped as the desktop sidebar's sections: [name, Bots] in the sidebar's order, the
+     * "everything else" section where it sits (or last), empty groups left out, the Primary and pinned Bots not
+     * repeated. Null when the account has no sections or none matches a listed Bot: the list stays as it was.
+     */
+    private java.util.List<Object[]> sectionGroups(JSONObject primary,java.util.List<JSONObject> pinned){
+        JSONArray sections=botPreferences.optJSONArray("sections");if(sections==null||sections.length()==0||bots.length()==0)return null;
+        java.util.HashSet<String> skip=new java.util.HashSet<>();if(primary!=null)skip.add(primary.optString("id"));for(JSONObject bot:pinned)skip.add(bot.optString("id"));
+        java.util.LinkedHashMap<String,JSONObject> byId=new java.util.LinkedHashMap<>();for(JSONObject bot:orderedBots())byId.put(bot.optString("id"),bot);
+        java.util.HashSet<String> sectioned=new java.util.HashSet<>();int matched=0;
+        for(int i=0;i<sections.length();i++){JSONArray ids=sections.optJSONObject(i).optJSONArray("agentIds");if(ids!=null)for(int k=0;k<ids.length();k++)if(byId.containsKey(ids.optString(k))&&sectioned.add(ids.optString(k)))matched++;}
+        if(matched==0)return null;
+        if(BuildConfig.DEBUG)android.util.Log.i("GrokWearSections","sections="+sections.length()+" matched="+matched+" bots="+byId.size());
+        java.util.ArrayList<Object[]> groups=new java.util.ArrayList<>();boolean otherPlaced=false;java.util.HashSet<String> placed=new java.util.HashSet<>(skip);
+        for(int i=0;i<sections.length();i++){JSONObject section=sections.optJSONObject(i);java.util.ArrayList<JSONObject> members=new java.util.ArrayList<>();
+            if(GrokCore.OTHER_SECTION.equals(section.optString("id"))){otherPlaced=true;for(java.util.Map.Entry<String,JSONObject> e:byId.entrySet())if(!sectioned.contains(e.getKey())&&placed.add(e.getKey()))members.add(e.getValue());}
+            else{JSONArray ids=section.optJSONArray("agentIds");for(int k=0;k<ids.length();k++){JSONObject bot=byId.get(ids.optString(k));if(bot!=null&&placed.add(ids.optString(k)))members.add(bot);}}
+            if(!members.isEmpty())groups.add(new Object[]{section.optString("name").isEmpty()?"Bots":section.optString("name"),members});}
+        if(!otherPlaced){java.util.ArrayList<JSONObject> rest=new java.util.ArrayList<>();for(java.util.Map.Entry<String,JSONObject> e:byId.entrySet())if(placed.add(e.getKey()))rest.add(e.getValue());if(!rest.isEmpty())groups.add(new Object[]{"Other Bots",rest});}
+        return groups;
+    }
+    /** A desktop sidebar section's name above its Bots, styled like the "Pinned" heading. */
+    private void sectionHeading(String name){TextView heading=label(name,12,SECONDARY);heading.setTypeface(font(500));heading.setAccessibilityHeading(true);heading.setSingleLine(true);heading.setEllipsize(android.text.TextUtils.TruncateAt.END);((LinearLayout.LayoutParams)heading.getLayoutParams()).topMargin=dp(10);}
     private void botChip(String name,int accent,Runnable action){botChip(name,accent,action,null);}
     private void botChip(String name,int accent,Runnable action,JSONObject metadata){
         LinearLayout row=new LinearLayout(this);row.setGravity(Gravity.CENTER_VERTICAL);row.setPadding(dp(10),0,dp(10),0);row.setBackground(shape(CARD_ROW,25));row.setClickable(true);row.setFocusable(true);row.setContentDescription(name);row.setOnClickListener(v->{navigation++;action.run();});row.setEnabled(!botSelectionPending);

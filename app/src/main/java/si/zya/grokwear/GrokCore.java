@@ -266,6 +266,32 @@ final class GrokCore {
                 if(seen.add((String)id))safe.put(id);}
             if(valid)result.put("pinnedAgentIds",safe);
         }
+        JSONArray sections=sidebarSections(settings);if(sections.length()>0)result.put("sections",sections);
+        return result;
+    }
+    /** The "everything else" section in the desktop sidebar: Bots no other section lists. */
+    static final String OTHER_SECTION="__agents__";
+    /**
+     * The desktop app's sidebar sections, read-only and in order: [{id, name, agentIds}]. The OTHER_SECTION
+     * entry has no ids. A malformed section is skipped on its own; nothing here is ever written back.
+     */
+    static JSONArray sidebarSections(JSONObject settings)throws Exception {
+        JSONArray result=new JSONArray();
+        JSONObject sidebar=settings==null?null:settings.optJSONObject("sidebarSections");
+        JSONArray sections=sidebar==null?null:sidebar.optJSONArray("sections");
+        if(sections==null)return result;
+        java.util.HashSet<String> seenSections=new java.util.HashSet<>();
+        for(int i=0;i<Math.min(50,sections.length());i++){
+            JSONObject section=sections.optJSONObject(i);if(section==null)continue;
+            String id=text(section,"id"),name=text(section,"name").trim();
+            if(id.isEmpty()||id.length()>128||!seenSections.add(id))continue;
+            if(name.length()>80)name=name.substring(0,79)+"…";
+            JSONArray ids=section.optJSONArray("agentIds"),safe=new JSONArray();java.util.HashSet<String> seen=new java.util.HashSet<>();
+            if(ids!=null)for(int k=0;k<Math.min(500,ids.length());k++){Object agent=ids.opt(k);
+                if(agent instanceof String&&!((String)agent).isEmpty()&&safeSession((String)agent)&&seen.add((String)agent))safe.put(agent);}
+            if(!OTHER_SECTION.equals(id)&&safe.length()==0)continue;
+            result.put(new JSONObject().put("id",id).put("name",name).put("agentIds",safe));
+        }
         return result;
     }
     /**
