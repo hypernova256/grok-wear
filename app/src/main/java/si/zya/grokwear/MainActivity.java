@@ -343,21 +343,33 @@ public final class MainActivity extends Activity {
             default:screen="ready";ready();break;
         }
     }
+    /**
+     * The watch's own UI font where it has one: Pixel Watch names Google Sans Text "google-sans-text" (with
+     * -medium and -bold families). A watch without them gets the default font at the same weight.
+     */
+    private static final android.util.SparseArray<Typeface> FONTS=new android.util.SparseArray<>();
+    static Typeface font(int weight){
+        Typeface cached=FONTS.get(weight);if(cached!=null)return cached;
+        String family=weight>=600?"google-sans-text-bold":weight>=500?"google-sans-text-medium":"google-sans-text";
+        Typeface face=Typeface.create(family,Typeface.NORMAL);
+        if(face==null||face.equals(Typeface.DEFAULT))face=Typeface.create(Typeface.DEFAULT,weight,false);
+        FONTS.put(weight,face);return face;
+    }
     private TextView text(String value,float size,int color){TextView v=new TextView(this);v.setText(value);v.setTextSize(size);v.setTextColor(color);v.setGravity(Gravity.CENTER);v.setIncludeFontPadding(false);v.setPadding(0,0,0,0);
         // Whole words wrap; hyphenated fragments are hard to read on a small round screen.
         v.setHyphenationFrequency(android.text.Layout.HYPHENATION_FREQUENCY_NONE);return v;}
     private TextView label(String value,float size,int color){TextView v=text(value,size,color);body.addView(v,new LinearLayout.LayoutParams(-1,-2));return v;}
     private void gap(int amount){View v=new View(this);body.addView(v,new LinearLayout.LayoutParams(1,dp(amount)));}
-    private void title(String value){TextView v=label(value,20,WHITE);v.setTypeface(Typeface.create(Typeface.DEFAULT,600,false),Typeface.NORMAL);gap(7);}
-    private Button button(String value,Runnable action){Button b=new Button(this);b.setText(value);b.setTextSize(getResources().getConfiguration().fontScale>1.2f?12:14);b.setTextColor(WHITE);b.setTypeface(Typeface.create(Typeface.DEFAULT,500,false));b.setAllCaps(false);b.setIncludeFontPadding(false);b.setMinHeight(0);b.setMinimumHeight(0);b.setPadding(dp(8),dp(6),dp(8),dp(6));b.setBackground(shape(GLASS,24));b.setContentDescription(value);b.setOnClickListener(v->{navigation++;action.run();});return b;}
+    private void title(String value){TextView v=label(value,20,WHITE);v.setTypeface(font(600),Typeface.NORMAL);gap(7);}
+    private Button button(String value,Runnable action){Button b=new Button(this);b.setText(value);b.setTextSize(getResources().getConfiguration().fontScale>1.2f?12:14);b.setTextColor(WHITE);b.setTypeface(font(500));b.setAllCaps(false);b.setIncludeFontPadding(false);b.setMinHeight(0);b.setMinimumHeight(0);b.setPadding(dp(8),dp(6),dp(8),dp(6));b.setBackground(shape(GLASS,24));b.setContentDescription(value);b.setOnClickListener(v->{navigation++;action.run();});return b;}
     private Button action(String value,Runnable action){Button b=button(value,action);LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,dp(48));p.topMargin=dp(7);body.addView(b,p);return b;}
     private void welcome(){boolean large=getResources().getConfiguration().fontScale>1.2f;
-        TextView welcomeTitle=label("Grok Wear",large?14:16,WHITE);welcomeTitle.setTypeface(Typeface.create(Typeface.DEFAULT,600,false),Typeface.NORMAL);gap(4);
+        TextView welcomeTitle=label("Grok Wear",large?14:16,WHITE);welcomeTitle.setTypeface(font(600),Typeface.NORMAL);gap(4);
         label("Talk to your Bots.",12,SECONDARY);gap(4);
         Button connect=action("Sign in",()->beginLogin());((LinearLayout.LayoutParams)connect.getLayoutParams()).topMargin=0;connect.setTextColor(Color.BLACK);connect.setBackground(shape(WHITE,24));
         label(preview?"Simulated · no microphone":"Your own Grok account",12,SECONDARY);gap(12);label("Unofficial Grok client",12,SECONDARY);
     }
-    private void qr(){TextView context=label(preview?"Demo QR":"Connect Grok",13,WHITE);context.setTypeface(Typeface.create(Typeface.DEFAULT,600,false),Typeface.NORMAL);gap(3);
+    private void qr(){TextView context=label(preview?"Demo QR":"Connect Grok",13,WHITE);context.setTypeface(font(600),Typeface.NORMAL);gap(3);
         ImageView qr=new ImageView(this);qr.setContentDescription(preview?"Demo QR code":"Grok sign-in QR code");
         if(preview)drawQr(qr,"https://example.invalid/ui-preview");else loadQr(qr);
         int size=dp(Math.min(94,side*.49f));body.addView(qr,new LinearLayout.LayoutParams(size,size));gap(3);
@@ -407,7 +419,7 @@ public final class MainActivity extends Activity {
             if(!pinned.isEmpty())pinnedGrid(pinned);
             // Every other Bot pinned: no empty "Bots" header.
             if(pinned.isEmpty()||bots.length()-1>pinned.size())label("Bots",17,WHITE);
-        }else{TextView title=label("Bots",17,WHITE);title.setTypeface(Typeface.create(Typeface.DEFAULT,600,false));
+        }else{TextView title=label("Bots",17,WHITE);title.setTypeface(font(600));
             if(pickToCall)label("Choose a Bot to call",12,WHITE);
             else if(!preview&&preferencesKnown&&bots.length()>0)label("No main Bot. Choose one in the Grok Bot app on your phone.",12,SECONDARY);
             gap(8);if(!pinned.isEmpty())pinnedGrid(pinned);}
@@ -458,7 +470,7 @@ public final class MainActivity extends Activity {
     /** Blue pill with the unread count (99+ at most), or a small dot when the count is unknown. */
     private View unreadBadge(int count){
         if(count<=0)return statusDot(BLUE,BLUE);
-        TextView badge=text(count>99?"99+":Integer.toString(count),11,WHITE);badge.setTypeface(Typeface.create(Typeface.DEFAULT,600,false));badge.setMinWidth(dp(18));badge.setPadding(dp(5),0,dp(5),0);badge.setBackground(shape(BLUE,9));badge.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);return badge;
+        TextView badge=text(count>99?"99+":Integer.toString(count),11,WHITE);badge.setTypeface(font(600));badge.setMinWidth(dp(18));badge.setPadding(dp(5),0,dp(5),0);badge.setBackground(shape(BLUE,9));badge.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);return badge;
     }
     private JSONArray pinIds(){JSONArray pins=botPreferences.optJSONArray("pinnedAgentIds");return pins==null?new JSONArray():pins;}
     private boolean isPinned(String id){JSONArray pins=pinIds();for(int i=0;i<pins.length();i++)if(id.equals(pins.optString(i)))return true;return false;}
@@ -475,7 +487,7 @@ public final class MainActivity extends Activity {
     private void markPinHintDone(){if(preview||pinHintDone())return;try{getSharedPreferences("grokwear_ui",MODE_PRIVATE).edit().putBoolean("pin_hint_done",true).apply();}catch(Exception unavailable){}}
     /** Two columns of 74 × 70 dp tiles. Nine or more pins fold to seven tiles and a "+N" tile. */
     private void pinnedGrid(java.util.List<JSONObject> pins){
-        TextView heading=label("Pinned",12,SECONDARY);heading.setTypeface(Typeface.create(Typeface.DEFAULT,500,false));heading.setAccessibilityHeading(true);heading.getLayoutParams().height=dp(24);
+        TextView heading=label("Pinned",12,SECONDARY);heading.setTypeface(font(500));heading.setAccessibilityHeading(true);heading.getLayoutParams().height=dp(24);
         boolean folded=pins.size()>8&&!pinGridExpanded;int shown=folded?7:pins.size(),cells=shown+(folded?1:0);LinearLayout row=null;
         for(int i=0;i<cells;i++){
             if(i%2==0){row=new LinearLayout(this);row.setGravity(Gravity.CENTER_HORIZONTAL);LinearLayout.LayoutParams rp=new LinearLayout.LayoutParams(-1,dp(70));if(i>0)rp.topMargin=dp(6);body.addView(row,rp);}
@@ -504,7 +516,7 @@ public final class MainActivity extends Activity {
     }
     private View moreTile(int hidden){
         FrameLayout tile=new FrameLayout(this);tile.setClickable(true);tile.setFocusable(true);
-        TextView disc=text("+"+hidden,16,WHITE);disc.setTypeface(Typeface.create(Typeface.DEFAULT,500,false));GradientDrawable round=new GradientDrawable();round.setShape(GradientDrawable.OVAL);round.setColor(GLASS);disc.setBackground(round);disc.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        TextView disc=text("+"+hidden,16,WHITE);disc.setTypeface(font(500));GradientDrawable round=new GradientDrawable();round.setShape(GradientDrawable.OVAL);round.setColor(GLASS);disc.setBackground(round);disc.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         FrameLayout.LayoutParams fp=new FrameLayout.LayoutParams(dp(44),dp(44),Gravity.TOP|Gravity.CENTER_HORIZONTAL);fp.topMargin=dp(4);tile.addView(disc,fp);
         TextView more=text("More",12,SECONDARY);more.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);FrameLayout.LayoutParams lp=new FrameLayout.LayoutParams(-1,dp(16),Gravity.TOP);lp.topMargin=dp(54);tile.addView(more,lp);
         tile.setContentDescription("Show "+hidden+" more pinned Bots");tile.setOnClickListener(v->{pinGridExpanded=true;renderBotListPreservingScroll();});
@@ -523,7 +535,7 @@ public final class MainActivity extends Activity {
     private void botActions(){
         JSONObject bot=actionsBot;String name=bot.optString("name","Unnamed Bot");
         BotAvatarView face=new BotAvatarView(this);applyAvatar(face,name,bot);face.state("ready",BLUE,0);face.running(visible);avatars.add(face);face.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);body.addView(face,new LinearLayout.LayoutParams(dp(48),dp(48)));gap(2);
-        TextView title=label(name,15,WHITE);title.setTypeface(Typeface.create(Typeface.DEFAULT,500,false));title.setSingleLine(true);title.setEllipsize(android.text.TextUtils.TruncateAt.END);gap(2);
+        TextView title=label(name,15,WHITE);title.setTypeface(font(500));title.setSingleLine(true);title.setEllipsize(android.text.TextUtils.TruncateAt.END);gap(2);
         View[] pin=pinViews(bot,true);if(pin[0]!=null)body.addView(pin[0],new LinearLayout.LayoutParams(-1,-2));
         LinearLayout.LayoutParams pp=new LinearLayout.LayoutParams(-1,dp(48));pp.topMargin=dp(6);body.addView(pin[1],pp);
         Button talk=action("Talk",()->{actionsBot=null;screen="bots";primaryAction(bot,true);});styleTalk(talk);talk.setTextColor(Color.BLACK);talk.setBackground(shape(WHITE,24));talk.setContentDescription("Talk to "+name);
@@ -543,7 +555,7 @@ public final class MainActivity extends Activity {
         control.setBackground(new android.graphics.drawable.InsetDrawable(shape(GLASS,22),0,dp(2),0,dp(2)));
         if(saving){ProgressBar spinner=new ProgressBar(this);spinner.setIndeterminateTintList(android.content.res.ColorStateList.valueOf(WHITE));spinner.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);control.addView(spinner,new LinearLayout.LayoutParams(dp(14),dp(14)));}
         else{ImageView icon=new ImageView(this);icon.setImageDrawable(new PinGlyph(WHITE,16,false,pinned));icon.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);control.addView(icon,new LinearLayout.LayoutParams(dp(16),dp(16)));}
-        TextView words=text(saving?(pinSavingTarget?"Pinning…":"Unpinning…"):pinned?"Unpin":"Pin",14,WHITE);words.setTypeface(Typeface.create(Typeface.DEFAULT,500,false));words.setSingleLine(true);LinearLayout.LayoutParams wp=new LinearLayout.LayoutParams(-2,-2);wp.leftMargin=dp(6);control.addView(words,wp);
+        TextView words=text(saving?(pinSavingTarget?"Pinning…":"Unpinning…"):pinned?"Unpin":"Pin",14,WHITE);words.setTypeface(font(500));words.setSingleLine(true);LinearLayout.LayoutParams wp=new LinearLayout.LayoutParams(-2,-2);wp.leftMargin=dp(6);control.addView(words,wp);
         boolean usable=!saving&&online&&!full&&!botSelectionPending;control.setEnabled(usable);if(!usable&&!saving)control.setAlpha(.4f);
         control.setContentDescription(saving?(pinSavingTarget?"Pinning ":"Unpinning ")+name:(pinned?"Unpin ":"Pin ")+name);
         control.setOnClickListener(v->{navigation++;setPinned(bot,!pinned);});
@@ -676,7 +688,7 @@ public final class MainActivity extends Activity {
         FrameLayout hero=new FrameLayout(this);hero.setMinimumHeight(dp(side-67));body.addView(hero,new LinearLayout.LayoutParams(-1,pin==null?dp(side-67):-2));
         Button back=button("Bots",()->openBotPicker());back.setText("‹ Bots");back.setTextSize(12);back.setPadding(0,0,0,0);back.setBackground(shape(Color.TRANSPARENT,0));back.setElevation(0);back.setStateListAnimator(null);FrameLayout.LayoutParams navp=new FrameLayout.LayoutParams(dp(68),dp(48),Gravity.TOP|Gravity.CENTER_HORIZONTAL);navp.topMargin=dp(pin!=null?-6:3);hero.addView(back,navp);
         BotAvatarView face=new BotAvatarView(this);applyAvatar(face,botName,selectedMetadata);face.state(screen.equals("done")?"done":"ready",accent(),0);face.running(visible);avatars.add(face);int faceSize=pin!=null?(caption?40:47):compactHero()?48:64;FrameLayout.LayoutParams fp=new FrameLayout.LayoutParams(dp(faceSize),dp(faceSize),Gravity.TOP|Gravity.CENTER_HORIZONTAL);fp.topMargin=dp(pin!=null?(caption?22:21):compactHero()?30:side*.34f-32);hero.addView(face,fp);
-        TextView name=text(botName,getResources().getConfiguration().fontScale>1.2f?12:16,WHITE);name.setTypeface(Typeface.create(Typeface.DEFAULT,600,false));name.setSingleLine(true);name.setEllipsize(android.text.TextUtils.TruncateAt.END);name.setContentDescription("Current Bot: "+botName);FrameLayout.LayoutParams np=new FrameLayout.LayoutParams(dp(side*.76f),dp(22),Gravity.TOP|Gravity.CENTER_HORIZONTAL);np.topMargin=dp(pin!=null?(caption?57:64):compactHero()?80:side*.535f-11);hero.addView(name,np);
+        TextView name=text(botName,getResources().getConfiguration().fontScale>1.2f?12:16,WHITE);name.setTypeface(font(600));name.setSingleLine(true);name.setEllipsize(android.text.TextUtils.TruncateAt.END);name.setContentDescription("Current Bot: "+botName);FrameLayout.LayoutParams np=new FrameLayout.LayoutParams(dp(side*.76f),dp(22),Gravity.TOP|Gravity.CENTER_HORIZONTAL);np.topMargin=dp(pin!=null?(caption?57:64):compactHero()?80:side*.535f-11);hero.addView(name,np);
         if(pin!=null){LinearLayout stack=new LinearLayout(this);stack.setOrientation(LinearLayout.VERTICAL);stack.setGravity(Gravity.CENTER_HORIZONTAL);
             if(caption){pin[0].setLayoutParams(new LinearLayout.LayoutParams(-2,-2));stack.addView(pin[0]);}
             stack.addView(pin[1],new LinearLayout.LayoutParams(-2,dp(48)));
@@ -742,7 +754,7 @@ public final class MainActivity extends Activity {
         // Inset further than the card so a long Bot name wraps inside the round edge.
         // An answer to a question from the Bot's phone call goes to whoever asks it, through the Bot.
         String asked=answering==null?"":answering.optString("askedBy");
-        TextView title=label(answering==null?"Send to "+botName+"?":"Answer "+(asked.isEmpty()?"the call":asked)+"?",14,WHITE);title.setTypeface(Typeface.create(Typeface.DEFAULT,500,false));title.setMaxLines(2);title.setEllipsize(android.text.TextUtils.TruncateAt.END);title.setPadding(dp(side*.06f),0,dp(side*.06f),0);gap(4);
+        TextView title=label(answering==null?"Send to "+botName+"?":"Answer "+(asked.isEmpty()?"the call":asked)+"?",14,WHITE);title.setTypeface(font(500));title.setMaxLines(2);title.setEllipsize(android.text.TextUtils.TruncateAt.END);title.setPadding(dp(side*.06f),0,dp(side*.06f),0);gap(4);
         TextView card=label(draftMessage,14,WHITE);card.setGravity(Gravity.START);card.setPadding(dp(12),dp(8),dp(12),dp(8));card.setBackground(shape(GLASS,20));card.setMaxLines(8);card.setEllipsize(android.text.TextUtils.TruncateAt.END);card.setContentDescription("Message: "+draftMessage);
         gap(6);
         LinearLayout row=new LinearLayout(this);row.setGravity(Gravity.CENTER);
@@ -988,7 +1000,7 @@ public final class MainActivity extends Activity {
         LinearLayout outer=body;body=card;
         try{
             String question=Approvals.headline(approval,botName),line=approval.optString("line");
-            TextView head=label(question,13,WHITE);head.setTypeface(Typeface.create(Typeface.DEFAULT,600,false));head.setGravity(Gravity.START);
+            TextView head=label(question,13,WHITE);head.setTypeface(font(600));head.setGravity(Gravity.START);
             if(!line.isEmpty()){gap(3);TextView detail=label(line,12,SECONDARY);detail.setGravity(Gravity.START);detail.setMaxLines(4);detail.setEllipsize(android.text.TextUtils.TruncateAt.END);}
             String[] choices=Approvals.choices(approval);boolean pending="pending".equals(approval.optString("status"));
             // The watch answers only for your own Bots (FEATURES-SPEC §2.4); a teammate's goes through the phone.
@@ -1037,7 +1049,7 @@ public final class MainActivity extends Activity {
         LinearLayout outer=body;body=card;
         try{
             String who=PhoneCalls.headline(call,botName),line=PhoneCalls.status(call,pending);
-            TextView head=label(who,13,WHITE);head.setTypeface(Typeface.create(Typeface.DEFAULT,600,false));head.setGravity(Gravity.START);gap(3);
+            TextView head=label(who,13,WHITE);head.setTypeface(font(600));head.setGravity(Gravity.START);gap(3);
             TextView status=label(line==null?PhoneCalls.timer(call,System.currentTimeMillis()):line,12,SECONDARY);status.setGravity(Gravity.START);
             if(line==null){callTimers.put(status,call.optLong("connectedAtMs"));tick();}
             if(ended||!pending.isEmpty())return;
@@ -1099,7 +1111,7 @@ public final class MainActivity extends Activity {
                     TextView answer=label(said,13,WHITE);answer.setGravity(Gravity.START);answer.setMaxLines(4);answer.setEllipsize(android.text.TextUtils.TruncateAt.END);}
                 return;
             }
-            gap(3);TextView head=label(prompt.isEmpty()?"Answer needed":prompt,13,WHITE);head.setTypeface(Typeface.create(Typeface.DEFAULT,600,false));head.setGravity(Gravity.START);head.setMaxLines(5);head.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            gap(3);TextView head=label(prompt.isEmpty()?"Answer needed":prompt,13,WHITE);head.setTypeface(font(600));head.setGravity(Gravity.START);head.setMaxLines(5);head.setEllipsize(android.text.TextUtils.TruncateAt.END);
             long deadline=question.optLong("deadlineAtMs");
             if(deadline>0){gap(3);TextView left=label(CallQuestions.remaining(deadline,now),12,ORANGE);left.setGravity(Gravity.START);questionTimers.put(left,deadline);tick();}
             if(!own){gap(4);TextView elsewhere=label("Answer on your phone",11,SECONDARY);elsewhere.setGravity(Gravity.START);}
@@ -1171,7 +1183,7 @@ public final class MainActivity extends Activity {
             }
             boolean own=!(selectedMetadata.has("viewerIsOwner")&&!selectedMetadata.optBoolean("viewerIsOwner",true)),answerable=own&&Widgets.answerable(widget);
             LinearLayout top=new LinearLayout(this);top.setGravity(Gravity.TOP);
-            TextView head=text(prompt,13,WHITE);head.setTypeface(Typeface.create(Typeface.DEFAULT,600,false));head.setGravity(Gravity.START);head.setMaxLines(6);head.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            TextView head=text(prompt,13,WHITE);head.setTypeface(font(600));head.setGravity(Gravity.START);head.setMaxLines(6);head.setEllipsize(android.text.TextUtils.TruncateAt.END);
             top.addView(head,new LinearLayout.LayoutParams(0,-2,1));
             if(own){Button close=button("✕",()->answerWidget(widget,null));close.setContentDescription("Dismiss question");close.setTextColor(SECONDARY);close.setBackground(shape(Color.TRANSPARENT,0));
                 close.setPadding(0,0,0,0);close.setEnabled(!sending&&!preview);top.addView(close,new LinearLayout.LayoutParams(dp(32),dp(32)));}
@@ -1223,7 +1235,7 @@ public final class MainActivity extends Activity {
         LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.VERTICAL);card.setPadding(dp(10),dp(8),dp(10),dp(8));card.setBackground(shape(CARD,14));card.setTag("phone_tool");
         LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-1,-2);cp.topMargin=dp(6);body.addView(card,cp);
         LinearLayout outer=body;body=card;
-        try{TextView head=label(botName+" wants to use your phone",13,WHITE);head.setTypeface(Typeface.create(Typeface.DEFAULT,600,false));head.setGravity(Gravity.START);
+        try{TextView head=label(botName+" wants to use your phone",13,WHITE);head.setTypeface(font(600));head.setGravity(Gravity.START);
             gap(3);TextView where=label("Answer on your phone",11,SECONDARY);where.setGravity(Gravity.START);}
         finally{body=outer;}
     }
@@ -1260,7 +1272,7 @@ public final class MainActivity extends Activity {
         callStage=new FrameLayout(this);body.addView(callStage,new LinearLayout.LayoutParams(-1,dp(side-62)));callCompact=!caption.isEmpty();
         orb=new BotAvatarView(this);avatars.add(orb);applyAvatar(orb,botName,selectedMetadata);orb.state(screen,accent(),0);orb.running(visible);orb.setOnClickListener(v->{if(preview){screen="listening";caption="";updateCallText();}else VoiceService.interrupt(this);});
         int faceSize=callCompact?44:64;FrameLayout.LayoutParams fp=new FrameLayout.LayoutParams(dp(faceSize),dp(faceSize),Gravity.TOP|Gravity.CENTER_HORIZONTAL);fp.topMargin=dp(side*(callCompact?.25f:.34f)-faceSize/2f);callStage.addView(orb,fp);
-        callBot=text(botName,getResources().getConfiguration().fontScale>1.2f?12:15,WHITE);callBot.setTypeface(Typeface.create(Typeface.DEFAULT,600,false));callBot.setSingleLine(true);callBot.setEllipsize(android.text.TextUtils.TruncateAt.END);callBot.setContentDescription("Current Bot: "+botName);placeCall(callBot,callCompact?.385f:.535f,22);
+        callBot=text(botName,getResources().getConfiguration().fontScale>1.2f?12:15,WHITE);callBot.setTypeface(font(600));callBot.setSingleLine(true);callBot.setEllipsize(android.text.TextUtils.TruncateAt.END);callBot.setContentDescription("Current Bot: "+botName);placeCall(callBot,callCompact?.385f:.535f,22);
         LinearLayout status=new LinearLayout(this);status.setGravity(Gravity.CENTER);waveform=new WaveformView(this);waveform.setColor(accent());waveform.running(visible);status.addView(waveform,new LinearLayout.LayoutParams(dp(36),dp(18)));callStatus=text("",13,SECONDARY);callStatus.setSingleLine(true);callStatus.setEllipsize(android.text.TextUtils.TruncateAt.END);LinearLayout.LayoutParams statusText=new LinearLayout.LayoutParams(-2,-2);statusText.leftMargin=dp(10);status.addView(callStatus,statusText);placeCall(status,callCompact?.47f:.615f,22);
         callCaption=text(caption,getResources().getConfiguration().fontScale>1.2f?12:14,WHITE);callCaption.setMaxLines(side<200||getResources().getConfiguration().fontScale>1.2f?1:2);callCaption.setEllipsize(android.text.TextUtils.TruncateAt.END);callCaption.setOnClickListener(v->showCaption());placeCall(callCaption,.56f,side<200?24:40);FrameLayout.LayoutParams captionPosition=(FrameLayout.LayoutParams)callCaption.getLayoutParams();captionPosition.topMargin+=dp(7);callCaption.setLayoutParams(captionPosition);callHint=null;
         LinearLayout controls=new LinearLayout(this);controls.setGravity(Gravity.CENTER);FrameLayout.LayoutParams cp=new FrameLayout.LayoutParams(dp(108),dp(48),Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL);cp.bottomMargin=dp(side*.04f);root.addView(controls,cp);
@@ -1396,7 +1408,7 @@ public final class MainActivity extends Activity {
     private void historyHeader(String heading,Runnable back){
         LinearLayout bar=new LinearLayout(this);bar.setGravity(Gravity.CENTER_VERTICAL);
         Button b=button("Back",back);b.setText("‹");b.setTextSize(24);b.setPadding(0,0,0,0);bar.addView(b,new LinearLayout.LayoutParams(dp(48),dp(48)));
-        LinearLayout titles=new LinearLayout(this);titles.setOrientation(LinearLayout.VERTICAL);titles.setGravity(Gravity.CENTER_VERTICAL);TextView title=text(heading,16,WHITE);title.setTypeface(Typeface.create(Typeface.DEFAULT,600,false));title.setSingleLine(true);title.setEllipsize(android.text.TextUtils.TruncateAt.END);title.setIncludeFontPadding(false);titles.addView(title);TextView bot=text(botName,10,SECONDARY);bot.setSingleLine(true);bot.setEllipsize(android.text.TextUtils.TruncateAt.END);bot.setIncludeFontPadding(false);bot.setContentDescription("History for Bot: "+botName);titles.addView(bot);bar.addView(titles,new LinearLayout.LayoutParams(0,-1,1));
+        LinearLayout titles=new LinearLayout(this);titles.setOrientation(LinearLayout.VERTICAL);titles.setGravity(Gravity.CENTER_VERTICAL);TextView title=text(heading,16,WHITE);title.setTypeface(font(600));title.setSingleLine(true);title.setEllipsize(android.text.TextUtils.TruncateAt.END);title.setIncludeFontPadding(false);titles.addView(title);TextView bot=text(botName,10,SECONDARY);bot.setSingleLine(true);bot.setEllipsize(android.text.TextUtils.TruncateAt.END);bot.setIncludeFontPadding(false);bot.setContentDescription("History for Bot: "+botName);titles.addView(bot);bar.addView(titles,new LinearLayout.LayoutParams(0,-1,1));
         FrameLayout.LayoutParams hp=new FrameLayout.LayoutParams(dp(side*.76f),dp(48),Gravity.TOP|Gravity.CENTER_HORIZONTAL);hp.topMargin=dp(23);root.addView(bar,hp);
         FrameLayout.LayoutParams sp=(FrameLayout.LayoutParams)currentScroll.getLayoutParams();sp.topMargin=dp(73);sp.bottomMargin=dp(14);currentScroll.setLayoutParams(sp);currentScroll.setVerticalScrollBarEnabled(true);
         body.setPadding(dp(side*.12f),dp(2),dp(side*.12f),dp(30));
