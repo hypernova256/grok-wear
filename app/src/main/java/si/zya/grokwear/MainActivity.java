@@ -514,8 +514,6 @@ public final class MainActivity extends Activity {
             LinearLayout list=new LinearLayout(this);list.setTag("list");list.setOrientation(LinearLayout.VERTICAL);list.setPadding(dp(side*.055f),dp(10),dp(side*.055f),0);body.addView(list,new LinearLayout.LayoutParams(-1,-2));body=list;
             if(hint){TextView line=text("Hold a Bot to pin it",12,SECONDARY);line.setCompoundDrawablesRelativeWithIntrinsicBounds(new PinGlyph(SECONDARY,12,false,false),null,null,null);line.setCompoundDrawablePadding(dp(4));LinearLayout.LayoutParams hp=new LinearLayout.LayoutParams(-2,dp(18));hp.gravity=Gravity.CENTER_HORIZONTAL;hp.bottomMargin=dp(4);body.addView(line,hp);}
             if(!pinned.isEmpty())pinnedGrid(pinned);
-            // Every other Bot pinned: no empty "Bots" header. With desktop sections, each section has its own.
-            if((pinned.isEmpty()||bots.length()-1>pinned.size())&&sectionGroups(primary,pinned)==null)listHeader("Bots");
         }else{wideList();title("Bots");
             if(pickToCall)label("Choose a Bot to call",12,WHITE);
             else if(!preview&&preferencesKnown&&bots.length()>0)label("No main Bot. Choose one in the Grok Bot app on your phone.",12,SECONDARY);
@@ -525,9 +523,19 @@ public final class MainActivity extends Activity {
         if(bots.length()==0&&!botsCached&&!selectedMetadata.optString("id","").isEmpty())botChip(botName,BLUE,()->chooseBot(selectedMetadata.optString("id")),selectedMetadata);
         else{java.util.HashSet<String> shown=new java.util.HashSet<>();for(JSONObject bot:pinned)shown.add(bot.optString("id"));
             java.util.List<Object[]> groups=sectionGroups(primary,pinned);
-            if(groups!=null){for(Object[] group:groups){sectionHeading((String)group[0]);@SuppressWarnings("unchecked") java.util.List<JSONObject> members=(java.util.List<JSONObject>)group[1];
-                for(JSONObject bot:members)botChip(bot.optString("name","Unnamed Bot"),BLUE,()->primaryAction(bot,pickToCall),bot);}}
-            else for(JSONObject bot:orderedBots()){if(primary!=null&&primary.optString("id").equals(bot.optString("id")))continue;if(shown.contains(bot.optString("id")))continue;String name=bot.optString("name","Unnamed Bot");botChip(name,BLUE,()->primaryAction(bot,pickToCall),bot);}}
+            // No desktop sections: one group, headed "Bots" under the Primary Bot's hero (the page title says it otherwise).
+            if(groups==null){java.util.ArrayList<JSONObject> rest=new java.util.ArrayList<>();
+                for(JSONObject bot:orderedBots()){if(primary!=null&&primary.optString("id").equals(bot.optString("id")))continue;if(!shown.contains(bot.optString("id")))rest.add(bot);}
+                groups=java.util.Collections.singletonList(new Object[]{primary!=null?"Bots":null,rest,"bots"});}
+            // Bots hidden on this watch leave their sections for one folded "Hidden" group at the end.
+            java.util.Set<String> hiddenIds=uiSet(HIDDEN_BOTS);java.util.ArrayList<JSONObject> hidden=new java.util.ArrayList<>();
+            for(Object[] group:groups){@SuppressWarnings("unchecked") java.util.List<JSONObject> members=(java.util.List<JSONObject>)group[1];
+                java.util.ArrayList<JSONObject> listed=new java.util.ArrayList<>();for(JSONObject bot:members)if(hiddenIds.contains(bot.optString("id")))hidden.add(bot);else listed.add(bot);
+                if(listed.isEmpty())continue;String key="section:"+group[2];boolean folded=group[0]!=null&&uiSet(COLLAPSED_SECTIONS).contains(key);
+                if(group[0]!=null)sectionHeading((String)group[0],folded,listed.size(),()->{toggleUiSet(COLLAPSED_SECTIONS,key);renderBotListPreservingScroll();});
+                if(!folded)for(JSONObject bot:listed)botChip(bot.optString("name","Unnamed Bot"),BLUE,()->primaryAction(bot,pickToCall),bot);}
+            if(!hidden.isEmpty()){sectionHeading("Hidden",!hiddenExpanded,hidden.size(),()->{hiddenExpanded=!hiddenExpanded;renderBotListPreservingScroll();});
+                if(hiddenExpanded)for(JSONObject bot:hidden)botChip(bot.optString("name","Unnamed Bot"),BLUE,()->primaryAction(bot,pickToCall),bot);}}
         if(!botListError.isEmpty())label(botListError,12,SECONDARY);if(botsCached||!botsLoading){if(bots.length()==0&&botListError.isEmpty())label("No Bots found",14,SECONDARY);
             // A refresh of a saved list shows that it's running and when the list last arrived, even when nothing changed.
             if(botsCached&&botsLoading){Button busy=action("Refreshing…",()->{});busy.setEnabled(false);}else action(botsCached?"Refresh":"Try again",()->loadBots());
@@ -552,12 +560,30 @@ public final class MainActivity extends Activity {
         for(int i=0;i<sections.length();i++){JSONObject section=sections.optJSONObject(i);java.util.ArrayList<JSONObject> members=new java.util.ArrayList<>();
             if(GrokCore.OTHER_SECTION.equals(section.optString("id"))){otherPlaced=true;for(java.util.Map.Entry<String,JSONObject> e:byId.entrySet())if(!sectioned.contains(e.getKey())&&placed.add(e.getKey()))members.add(e.getValue());}
             else{JSONArray ids=section.optJSONArray("agentIds");for(int k=0;k<ids.length();k++){JSONObject bot=byId.get(ids.optString(k));if(bot!=null&&placed.add(ids.optString(k)))members.add(bot);}}
-            if(!members.isEmpty())groups.add(new Object[]{section.optString("name").isEmpty()?"Bots":section.optString("name"),members});}
-        if(!otherPlaced){java.util.ArrayList<JSONObject> rest=new java.util.ArrayList<>();for(java.util.Map.Entry<String,JSONObject> e:byId.entrySet())if(placed.add(e.getKey()))rest.add(e.getValue());if(!rest.isEmpty())groups.add(new Object[]{"Other Bots",rest});}
+            if(!members.isEmpty())groups.add(new Object[]{section.optString("name").isEmpty()?"Bots":section.optString("name"),members,section.optString("id")});}
+        if(!otherPlaced){java.util.ArrayList<JSONObject> rest=new java.util.ArrayList<>();for(java.util.Map.Entry<String,JSONObject> e:byId.entrySet())if(placed.add(e.getKey()))rest.add(e.getValue());if(!rest.isEmpty())groups.add(new Object[]{"Other Bots",rest,GrokCore.OTHER_SECTION});}
         return groups;
     }
-    /** A desktop sidebar section's name above its Bots, styled like the "Pinned" heading. */
-    private void sectionHeading(String name){listHeader(name);}
+    /**
+     * A section's name above its Bots, styled like the list headers, with a chevron: tap it to fold the section away.
+     * Folded, it shows how many Bots it holds. Folds are kept on this watch only; the desktop sidebar isn't changed.
+     */
+    private void sectionHeading(String name,boolean folded,int count,Runnable toggle){
+        LinearLayout row=new LinearLayout(this);row.setGravity(Gravity.CENTER_VERTICAL);row.setPadding(dp(10),dp(10),dp(10),dp(6));row.setMinimumHeight(dp(40));
+        row.setBackground(ripple(shape(0x00000000,20)));row.setClickable(true);row.setFocusable(true);
+        TextView label=text(folded?name+" · "+count:name,Look.TITLE_S,SECONDARY);label.setTypeface(font(500));label.setSingleLine(true);label.setEllipsize(android.text.TextUtils.TruncateAt.END);label.setGravity(Gravity.START);
+        row.addView(label,new LinearLayout.LayoutParams(0,-2,1));
+        ImageView chevron=new ImageView(this);android.graphics.drawable.Drawable d=getDrawable(R.drawable.ic_m_expand).mutate();d.setTint(SECONDARY);chevron.setImageDrawable(d);chevron.setRotation(folded?-90:0);
+        chevron.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);row.addView(chevron,new LinearLayout.LayoutParams(dp(20),dp(20)));
+        row.setContentDescription(name+", "+count+(count==1?" Bot":" Bots"));row.setStateDescription(folded?"Collapsed":"Expanded");row.setAccessibilityHeading(true);
+        row.setOnClickListener(v->{navigation++;v.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK);toggle.run();});
+        LinearLayout.LayoutParams rp=new LinearLayout.LayoutParams(-1,-2);rp.topMargin=dp(2);body.addView(row,rp);
+    }
+    // Watch-only list choices, by Bot or section id.
+    static final String HIDDEN_BOTS="hidden_bots",COLLAPSED_SECTIONS="collapsed_sections";private boolean hiddenExpanded;
+    private java.util.Set<String> uiSet(String key){try{return new java.util.HashSet<>(getSharedPreferences("grokwear_ui",MODE_PRIVATE).getStringSet(key,java.util.Collections.emptySet()));}catch(RuntimeException unavailable){return new java.util.HashSet<>();}}
+    private void toggleUiSet(String key,String value){java.util.Set<String> set=uiSet(key);if(!set.remove(value))set.add(value);
+        try{getSharedPreferences("grokwear_ui",MODE_PRIVATE).edit().putStringSet(key,set).apply();}catch(RuntimeException ignored){}}
     private void botChip(String name,int accent,Runnable action){botChip(name,accent,action,null);}
     private void botChip(String name,int accent,Runnable action,JSONObject metadata){
         LinearLayout row=new LinearLayout(this);row.setGravity(Gravity.CENTER_VERTICAL);row.setPadding(dp(10),0,dp(10),0);row.setBackground(ripple(shape(CARD_ROW,26)));row.setClickable(true);row.setFocusable(true);row.setContentDescription(name);row.setOnClickListener(v->{navigation++;action.run();});row.setEnabled(!botSelectionPending);
@@ -662,6 +688,10 @@ public final class MainActivity extends Activity {
         LinearLayout.LayoutParams pp=new LinearLayout.LayoutParams(-1,dp(48));pp.topMargin=dp(6);body.addView(pin[1],pp);
         Button talk=action("Talk",()->{actionsBot=null;screen="bots";primaryAction(bot,true);});styleTalk(talk);talk.setTextColor(Look.onPrimary);talk.setBackground(shape(Look.primary,26));talk.setContentDescription("Talk to "+name);
         action("Open chat",()->{actionsBot=null;screen="bots";primaryAction(bot,false);});
+        String id=bot.optString("id","");boolean hidden=uiSet(HIDDEN_BOTS).contains(id);
+        if(!id.isEmpty()&&(hidden||!isPinned(id))){Button hide=action(hidden?"Show in list":"Hide from list",hidden?R.drawable.ic_m_visibility:R.drawable.ic_m_visibility_off,()->{
+                toggleUiSet(HIDDEN_BOTS,id);root.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM);closeBotActions();});
+            hide.setContentDescription((hidden?"Show ":"Hide ")+name+(hidden?" in the Bot list":" from the Bot list on this watch"));}
     }
     /** The pin control and the line above it: an error, pins full, offline, or "Pinned" on the Bot page. */
     private View[] pinViews(JSONObject bot,boolean sheet){
