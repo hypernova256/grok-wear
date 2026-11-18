@@ -26,7 +26,10 @@ import java.util.concurrent.Executors;
 
 /** Native round-watch UI. Debug preview is isolated from account, network and voice code. */
 public final class MainActivity extends Activity {
-    private static final int WHITE=0xffffffff,SECONDARY=0xff8d8d93,SURFACE=0xff1e1e1e,BLUE=0xff006ceb,GLASS=0xff2c2c2e,CARD=0xff202020,RED=0xffe5484d,GREEN=0xff30d158,CARD_ROW=0xff1c1c1e,ORANGE=0xffff9800;
+    // Material 3 roles, refreshed from Look at each draw (the watch's palette can change): text, quiet text, containers, accent.
+    private static int WHITE=0xffffffff,SECONDARY=0xff8d8d93,SURFACE=0xff1e1e1e,BLUE=0xff006ceb,GLASS=0xff2c2c2e,CARD=0xff202020,RED=0xffe5484d,CARD_ROW=0xff1c1c1e;
+    private static final int GREEN=0xff6dd58c,ORANGE=0xffffb340,END=0xffe46962,END_ICON=0xff410e0b;
+    private void palette(){Look.load(this,preview);WHITE=Look.onSurface;SECONDARY=Look.onSurfaceVariant;SURFACE=Look.surfaceLow;BLUE=Look.primaryDim;GLASS=Look.surface;CARD=Look.surface;CARD_ROW=Look.surface;RED=Look.error;}
     private final Handler main=new Handler(Looper.getMainLooper());
     // Debug preview only: a demo reply alert outlives the activity, as ReplyAlertService does for real sends.
     private static final Handler PREVIEW_ALERT=new Handler(Looper.getMainLooper());
@@ -333,17 +336,15 @@ public final class MainActivity extends Activity {
         String chat=visible&&!preview&&screen.equals("ready")?selectedMetadata.optString("id",""):"";
         if(!chat.equals(openChat)){openChat=chat;if(!chat.isEmpty())ReplyAlertService.dismiss(this,chat);}
         for(BotAvatarView face:avatars)face.running(false);avatars.clear();orb=null;if(waveform!=null)waveform.running(false);waveform=null;volumeArc=null;transcriptBody=null;callStatus=null;main.removeCallbacks(callClock);
-        root=new FrameLayout(this);root.setBackgroundColor(Color.BLACK);setContentView(root);
+        palette();root=new FrameLayout(this);root.setBackgroundColor(Look.BACKGROUND);setContentView(root);
         // Wear OS swipe-to-dismiss gives way to any view that can scroll sideways, and single-line text counts:
         // without this, a swipe across a name, an excerpt or a button never goes back.
         final FrameLayout laidOut=root;root.getViewTreeObserver().addOnGlobalLayoutListener(()->noSideScroll(laidOut));
-        TextView top=text(preview&&!previewMedia?"UI preview":"",10,SECONDARY);top.setLetterSpacing(.08f);
-        FrameLayout.LayoutParams tp=new FrameLayout.LayoutParams(-1,dp(18),Gravity.TOP|Gravity.CENTER_HORIZONTAL);tp.topMargin=dp(9);root.addView(top,tp);if(!preview||screen.equals("ready")||screen.equals("done")||isCall())top.setVisibility(View.GONE);
         ScrollView scroll=new ScrollView(this);currentScroll=scroll;scroll.setFocusable(true);scroll.setFocusableInTouchMode(true);scroll.requestFocus();scroll.setFillViewport(true);scroll.setClipToPadding(false);scroll.setVerticalScrollBarEnabled(false);
-        FrameLayout.LayoutParams sp=new FrameLayout.LayoutParams(-1,-1);sp.topMargin=dp(isCall()?(preview?27:19):23);// Pages scroll all the way to the round edge; the gap a hard bottom margin left becomes padding inside the page.
+        FrameLayout.LayoutParams sp=new FrameLayout.LayoutParams(-1,-1);sp.topMargin=dp(isCall()?(preview?27:19):30);// Pages scroll all the way to the round edge; the gap a hard bottom margin left becomes padding inside the page.
         int edgeRoom=isCall()?0:dp(screen.equals("bots")?9:screen.equals("done")?12:30);sp.bottomMargin=isCall()?dp(side*.12f+50):0;root.addView(scroll,sp);
         body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);body.setGravity(Gravity.CENTER_HORIZONTAL);body.setPadding(dp(side*.12f),dp(isCall()||screen.equals("ready")?0:3),dp(side*.12f),dp(isCall()?0:screen.equals("bots")||screen.equals("done")?12:58)+edgeRoom);scroll.addView(body,new ScrollView.LayoutParams(-1,-2));
-        if(isCall()){call();return;}
+        if(isCall()){call();chrome(false);return;}
         // After sending, and when the Bot's reply lands, show the newest message rather than the top of the page:
         // the end of the chat, or its start when the newest comes first.
         if(scrollToEnd&&screen.equals("ready")){scrollToEnd=false;final ScrollView end=scroll;end.getViewTreeObserver().addOnPreDrawListener(new android.view.ViewTreeObserver.OnPreDrawListener(){
@@ -351,11 +352,6 @@ public final class MainActivity extends Activity {
                 int bottom=Math.max(0,end.getChildAt(0).getHeight()-end.getHeight());end.scrollTo(0,newestFirst()&&chat!=null?Math.min(bottom,chat.getTop()):bottom);return true;}});}
         else if(keepY>0){final ScrollView restored=scroll;restored.getViewTreeObserver().addOnPreDrawListener(new android.view.ViewTreeObserver.OnPreDrawListener(){
             public boolean onPreDraw(){restored.getViewTreeObserver().removeOnPreDrawListener(this);restored.scrollTo(0,keepY);return true;}});}
-        TextView more=text("↓ More",12,SECONDARY);more.setContentDescription("Scroll for more options");more.setBackground(shape(Color.BLACK,12));more.setVisibility(View.GONE);
-        FrameLayout.LayoutParams moreLayout=new FrameLayout.LayoutParams(dp(80),dp(18),Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL);moreLayout.bottomMargin=dp(9);root.addView(more,moreLayout);
-        more.setOnClickListener(v->currentScroll.smoothScrollBy(0,dp(side*.5f)));
-        scroll.getViewTreeObserver().addOnScrollChangedListener(()->more.setVisibility(!screen.equals("ready")&&!screen.equals("done")&&!screen.equals("bots")&&!screen.equals("settings")&&!screen.equals("signout_confirm")&&!isHistory()&&!bottomAction&&scroll.canScrollVertically(1)?View.VISIBLE:View.GONE));
-        more.post(()->more.setVisibility(!screen.equals("ready")&&!screen.equals("done")&&!screen.equals("bots")&&!screen.equals("settings")&&!screen.equals("signout_confirm")&&!isHistory()&&!bottomAction&&scroll.canScrollVertically(1)?View.VISIBLE:View.GONE));
         switch(screen){
             case "welcome":welcome();break;
             case "qr":qr();break;
@@ -387,6 +383,51 @@ public final class MainActivity extends Activity {
             case "error":message("Voice chat failed",safeError.isEmpty()?"The call ended unexpectedly.":safeError,"Try again",()->talkAgain());break;
             default:screen="ready";ready();break;
         }
+        chrome(!screen.equals("report")&&!screen.equals("qr"));
+    }
+    /**
+     * What every Wear OS screen has over its content: the time curved along the top (fading as the page scrolls),
+     * a curved scroll indicator by the crown, and list items that shrink as they near the round top and bottom edges.
+     */
+    private void chrome(boolean transform){
+        if(screen.equals("launch"))return;
+        final ScrollView scroll=currentScroll;
+        TimeArc time=new TimeArc();time.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);root.addView(time,new FrameLayout.LayoutParams(-1,dp(30),Gravity.TOP));
+        ScrollArc arc=new ScrollArc(scroll);arc.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);root.addView(arc,new FrameLayout.LayoutParams(-1,-1));
+        Runnable update=()->{time.setAlpha(Math.max(0,1-scroll.getScrollY()/(float)dp(24)));arc.invalidate();if(transform)EdgeScale.apply(scroll,body0(scroll));};
+        scroll.getViewTreeObserver().addOnScrollChangedListener(update::run);
+        scroll.getViewTreeObserver().addOnGlobalLayoutListener(update::run);
+    }
+    private static LinearLayout body0(ScrollView scroll){return scroll.getChildCount()>0&&scroll.getChildAt(0) instanceof LinearLayout?(LinearLayout)scroll.getChildAt(0):null;}
+    /** The time along the top of the round screen, as Wear OS's TimeText draws it; straight on a square screen. */
+    private final class TimeArc extends View {
+        private final android.graphics.Paint paint=new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);private final android.graphics.Path path=new android.graphics.Path();
+        private final Runnable minute=new Runnable(){public void run(){invalidate();postDelayed(this,60000-System.currentTimeMillis()%60000);}};
+        TimeArc(){super(MainActivity.this);paint.setTypeface(font(500));paint.setTextSize(android.util.TypedValue.applyDimension(android.util.TypedValue.COMPLEX_UNIT_SP,13,getResources().getDisplayMetrics()));paint.setColor(WHITE);paint.setTextAlign(android.graphics.Paint.Align.CENTER);}
+        @Override protected void onAttachedToWindow(){super.onAttachedToWindow();post(minute);}
+        @Override protected void onDetachedFromWindow(){removeCallbacks(minute);super.onDetachedFromWindow();}
+        @Override protected void onDraw(android.graphics.Canvas canvas){
+            String now=new java.text.SimpleDateFormat(android.text.format.DateFormat.is24HourFormat(getContext())?"H:mm":"h:mm",java.util.Locale.getDefault()).format(new java.util.Date());
+            float w=getWidth();android.graphics.Paint.FontMetrics m=paint.getFontMetrics();
+            if(!getResources().getConfiguration().isScreenRound()){canvas.drawText(now,w/2,dp(6)-m.ascent,paint);return;}
+            // Text sits on a circle inset from the bezel, its letters reading along the top.
+            float r=w/2-dp(6)+m.ascent;path.reset();path.addArc(new android.graphics.RectF(w/2-r,w/2-r,w/2+r,w/2+r),180,180);
+            canvas.drawTextOnPath(now,path,0,0,paint);
+        }
+    }
+    /** Wear OS's curved scroll indicator beside the crown: a short track with the visible part of the page lit. */
+    private final class ScrollArc extends View {
+        private final ScrollView scroll;private final android.graphics.Paint paint=new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        ScrollArc(ScrollView scroll){super(MainActivity.this);this.scroll=scroll;paint.setStyle(android.graphics.Paint.Style.STROKE);paint.setStrokeCap(android.graphics.Paint.Cap.ROUND);paint.setStrokeWidth(dp(4));}
+        @Override protected void onDraw(android.graphics.Canvas canvas){
+            if(scroll.getChildCount()==0)return;int content=scroll.getChildAt(0).getHeight(),view=scroll.getHeight();if(content<=view+dp(2))return;
+            float visible=Math.max(.18f,Math.min(1,view/(float)content)),at=Math.min(1,Math.max(0,scroll.getScrollY()/(float)(content-view)));
+            float w=getWidth(),h=getHeight();
+            if(!getResources().getConfiguration().isScreenRound()){float top=h*.3f,len=h*.4f;paint.setColor(Look.alpha(WHITE,.25f));canvas.drawLine(w-dp(5),top,w-dp(5),top+len,paint);paint.setColor(WHITE);float t=top+(len-len*visible)*at;canvas.drawLine(w-dp(5),t,w-dp(5),t+len*visible,paint);return;}
+            float r=w/2-dp(5),sweep=36;android.graphics.RectF ring=new android.graphics.RectF(w/2-r,h/2-r,w/2+r,h/2+r);
+            paint.setColor(Look.alpha(WHITE,.25f));canvas.drawArc(ring,-sweep/2,sweep,false,paint);
+            float thumb=sweep*visible;paint.setColor(WHITE);canvas.drawArc(ring,-sweep/2+(sweep-thumb)*at,thumb,false,paint);
+        }
     }
     /**
      * The watch's own UI font where it has one: Pixel Watch names Google Sans Text "google-sans-text" (with
@@ -405,15 +446,45 @@ public final class MainActivity extends Activity {
         v.setHyphenationFrequency(android.text.Layout.HYPHENATION_FREQUENCY_NONE);return v;}
     private TextView label(String value,float size,int color){TextView v=text(value,size,color);body.addView(v,new LinearLayout.LayoutParams(-1,-2));return v;}
     private void gap(int amount){View v=new View(this);body.addView(v,new LinearLayout.LayoutParams(1,dp(amount)));}
-    private void title(String value){TextView v=label(value,20,WHITE);v.setTypeface(font(600),Typeface.NORMAL);gap(7);}
-    private Button button(String value,Runnable action){Button b=new Button(this);b.setText(value);b.setTextSize(getResources().getConfiguration().fontScale>1.2f?12:14);b.setTextColor(WHITE);b.setTypeface(font(500));b.setAllCaps(false);b.setIncludeFontPadding(false);b.setMinHeight(0);b.setMinimumHeight(0);b.setPadding(dp(8),dp(6),dp(8),dp(6));b.setBackground(shape(GLASS,24));b.setContentDescription(value);b.setOnClickListener(v->{navigation++;action.run();});return b;}
-    private Button action(String value,Runnable action){Button b=button(value,action);LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,dp(48));p.topMargin=dp(7);body.addView(b,p);return b;}
-    private void welcome(){boolean large=getResources().getConfiguration().fontScale>1.2f;
-        TextView welcomeTitle=label("Grok Wear",large?14:16,WHITE);welcomeTitle.setTypeface(font(600),Typeface.NORMAL);gap(4);
-        label("Talk to your Bots.",12,SECONDARY);gap(4);
-        Button connect=action("Sign in",()->beginLogin());((LinearLayout.LayoutParams)connect.getLayoutParams()).topMargin=0;connect.setTextColor(Color.BLACK);connect.setBackground(shape(WHITE,24));
-        label(preview?"Simulated · no microphone":"Your own Grok account",12,SECONDARY);gap(12);label("Unofficial Grok client",12,SECONDARY);
+    /** The screen's title, as Wear's list header: centred, title-medium, with room under the time. */
+    private void title(String value){TextView v=label(value,Look.TITLE_L-2,WHITE);v.setTypeface(font(600),Typeface.NORMAL);v.setAccessibilityHeading(true);v.setPadding(dp(8),dp(6),dp(8),0);gap(8);}
+    private Button button(String value,Runnable action){Button b=new Button(this);b.setText(value);b.setTextSize(getResources().getConfiguration().fontScale>1.2f?13:Look.LABEL_M);b.setTextColor(WHITE);b.setTypeface(font(500));b.setAllCaps(false);b.setIncludeFontPadding(false);b.setMinHeight(0);b.setMinimumHeight(0);b.setPadding(dp(14),dp(6),dp(14),dp(6));b.setBackground(ripple(shape(GLASS,26)));b.setStateListAnimator(null);b.setElevation(0);b.setContentDescription(value);b.setOnClickListener(v->{navigation++;action.run();});return b;}
+    private Button action(String value,Runnable action){Button b=button(value,action);LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,dp(52));p.topMargin=dp(4);body.addView(b,p);
+        Integer icon=ACTION_ICONS.get(value);if(icon!=null)iconize(b,icon,Look.primary);return b;}
+    /** The app's own actions get Material icons by name, so every list of buttons reads the same way. */
+    private static final java.util.Map<String,Integer> ACTION_ICONS=java.util.Map.ofEntries(
+        java.util.Map.entry("Settings",R.drawable.ic_m_settings),java.util.Map.entry("Refresh",R.drawable.ic_m_refresh),java.util.Map.entry("Try again",R.drawable.ic_m_refresh),
+        java.util.Map.entry("New code",R.drawable.ic_m_refresh),java.util.Map.entry("Report a problem",R.drawable.ic_m_flag),java.util.Map.entry("Back",R.drawable.ic_m_back),
+        java.util.Map.entry("Details",R.drawable.ic_m_info),java.util.Map.entry("Cancel",R.drawable.ic_m_close),java.util.Map.entry("Not now",R.drawable.ic_m_close),
+        java.util.Map.entry("Open chat",R.drawable.ic_m_chat),java.util.Map.entry("Load older messages",R.drawable.ic_m_history),java.util.Map.entry("Load older",R.drawable.ic_m_history),
+        java.util.Map.entry("Use email instead",R.drawable.ic_m_mail),java.util.Map.entry("Use a GitHub issue instead",R.drawable.ic_m_phone),java.util.Map.entry("Sign out",R.drawable.ic_m_logout),
+        java.util.Map.entry("Chats",R.drawable.ic_m_chat),java.util.Map.entry("Switch Bot",R.drawable.ic_m_list),java.util.Map.entry("Message",R.drawable.ic_m_edit));
+    /** A Material action with its icon at the start, in the accent colour, and the label beside it. */
+    private Button action(String value,int icon,Runnable action){Button b=action(value,action);iconize(b,icon,Look.primary);return b;}
+    private void iconize(Button b,int icon,int tint){
+        android.graphics.drawable.Drawable d=getDrawable(icon).mutate();d.setTint(tint);d.setBounds(0,0,dp(22),dp(22));
+        b.setCompoundDrawablesRelative(d,null,null,null);b.setCompoundDrawablePadding(dp(10));b.setGravity(Gravity.START|Gravity.CENTER_VERTICAL);b.setSingleLine(true);b.setEllipsize(android.text.TextUtils.TruncateAt.END);
     }
+    /** Wear's compact button: a short tonal pill with an icon, or a round icon button when it has no label. */
+    private Button compact(String value,int icon,Runnable action){
+        Button b=button(value,action);b.setTextSize(Look.LABEL_S);android.graphics.drawable.Drawable d=getDrawable(icon).mutate();d.setTint(Look.primary);
+        if(value.isEmpty()){b.setPadding(0,0,0,0);b.setForeground(new android.graphics.drawable.InsetDrawable(d,dp(8)));b.setBackground(ripple(shape(GLASS,18)));return b;}
+        d.setBounds(0,0,dp(18),dp(18));b.setCompoundDrawablesRelative(d,null,null,null);b.setCompoundDrawablePadding(dp(6));b.setPadding(dp(12),0,dp(14),0);b.setBackground(ripple(shape(GLASS,18)));return b;
+    }
+    /** A press ripple over a shape, in the content colour, as Material buttons show. */
+    private android.graphics.drawable.Drawable ripple(android.graphics.drawable.Drawable shape){
+        return new android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(Look.alpha(Look.onSurface,.16f)),shape,null);
+    }
+    private void welcome(){boolean large=getResources().getConfiguration().fontScale>1.2f;
+        BotAvatarView face=new BotAvatarView(this);face.setPreview(true);face.setBotName("Grok");face.state("ready",Look.primary,0);face.running(visible);avatars.add(face);face.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);body.addView(face,new LinearLayout.LayoutParams(dp(52),dp(52)));gap(2);
+        TextView welcomeTitle=label("Grok Wear",large?18:Look.DISPLAY_S,WHITE);welcomeTitle.setTypeface(font(600),Typeface.NORMAL);welcomeTitle.setAccessibilityHeading(true);gap(2);
+        label("Talk to your Bots.",Look.BODY_M,SECONDARY);gap(12);
+        gap(30);label(preview?"Simulated · no microphone":"Signs in with your own Grok account",Look.BODY_S,SECONDARY);gap(4);label("Unofficial Grok client",Look.BODY_S,SECONDARY);
+        Button connect=pinnedAction("Sign in",null,()->beginLogin());iconize(connect,R.drawable.ic_m_login,Look.onPrimary);centreIcon(connect,"Sign in");
+        body.setPadding(body.getPaddingLeft(),dp(34),body.getPaddingRight(),body.getPaddingBottom());
+    }
+    /** An edge button's icon and label, centred together. */
+    private void centreIcon(Button b,String value){b.setGravity(Gravity.CENTER);int inset=Math.max(dp(8),(dp(side*EDGE_W)-dp(22)-dp(10)-(int)Math.ceil(b.getPaint().measureText(value)))/2);b.setPadding(inset,dp(6),inset,dp(6));}
     private void qr(){TextView context=label(preview?"Demo QR":"Connect Grok",13,WHITE);context.setTypeface(font(600),Typeface.NORMAL);gap(3);
         ImageView qr=new ImageView(this);qr.setContentDescription(preview?"Demo QR code":"Grok sign-in QR code");
         if(preview)drawQr(qr,"https://example.invalid/ui-preview");else loadQr(qr);
@@ -429,43 +500,26 @@ public final class MainActivity extends Activity {
     private JSONObject previewBot(String name,String message,boolean unread){try{return new JSONObject().put("id","preview-"+name.toLowerCase(java.util.Locale.ROOT).replace(' ','-')).put("name",name).put("lastMessagePreview",message).put("hasUnread",unread).put("isRunning",!unread);}catch(Exception impossible){return new JSONObject();}}
     private void styleTalk(Button talk){styleTalk(talk,"Talk");}
     private void styleTalk(Button talk,String label){talk.setText(label);talk.setTextSize(label.equals("Talk")?15:12);talk.setCompoundDrawablesWithIntrinsicBounds(new VoiceGlyph(),null,null,null);talk.setCompoundDrawablePadding(dp(6));talk.setSingleLine(true);talk.setEllipsize(android.text.TextUtils.TruncateAt.END);int inset=Math.max(dp(8),(dp(side*EDGE_W)-dp(26)-dp(8)-(int)Math.ceil(talk.getPaint().measureText(label)))/2);talk.setPadding(inset,dp(6),inset,dp(6));}
-    private void styleHomeTalk(Button talk,String name){
-        talk.setText("Talk to\n"+name);talk.setTextSize(12);talk.setSingleLine(false);talk.setMaxLines(2);talk.setEllipsize(android.text.TextUtils.TruncateAt.END);talk.setPadding(dp(8),dp(4),dp(8),dp(4));
-        talk.setCompoundDrawables(null,null,null,null);talk.setContentDescription("Talk to "+name);
-    }
-    private void addBotScrollIndicator(){
-        View cue=new View(this){final android.graphics.Paint p=new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-            @Override protected void onDraw(android.graphics.Canvas canvas){
-                if(currentScroll==null)return;float travel=Math.max(1,currentScroll.getChildAt(0).getHeight()-currentScroll.getHeight());
-                float progress=Math.min(1,Math.max(0,currentScroll.getScrollY()/travel));p.setStrokeCap(android.graphics.Paint.Cap.ROUND);p.setStrokeWidth(getWidth());
-                p.setColor(GLASS);canvas.drawLine(getWidth()/2f,getWidth()/2f,getWidth()/2f,getHeight()-getWidth()/2f,p);
-                float length=getHeight()*.35f,y=getWidth()/2f+progress*(getHeight()-length-getWidth());p.setColor(SECONDARY);canvas.drawLine(getWidth()/2f,y,getWidth()/2f,y+length,p);
-            }};
-        cue.setContentDescription("Scroll for more Bots");FrameLayout.LayoutParams cp=new FrameLayout.LayoutParams(dp(3),dp(36),Gravity.RIGHT|Gravity.CENTER_VERTICAL);cp.rightMargin=dp(9);root.addView(cue,cp);
-        final ScrollView scroll=currentScroll;Runnable update=()->{cue.setVisibility(scroll.canScrollVertically(1)||scroll.canScrollVertically(-1)?View.VISIBLE:View.GONE);cue.invalidate();};
-        scroll.getViewTreeObserver().addOnScrollChangedListener(update::run);cue.post(update);
-    }
     private void primaryAction(JSONObject bot,boolean start){if(preview){choosePreview(bot.optString("name"));if(start)talk();}else chooseBot(bot.optString("id"),start);}
     private void botList(){
         JSONObject primary=primaryBot();java.util.List<JSONObject> pinned=pinnedBots(primary);
         if(!pinned.isEmpty())markPinHintDone();
-        if(primary!=null){FrameLayout.LayoutParams scroll=(FrameLayout.LayoutParams)currentScroll.getLayoutParams();scroll.topMargin=0;currentScroll.setLayoutParams(scroll);body.setPadding(0,0,0,dp(24));scrollBehindEdge();FrameLayout hero=new FrameLayout(this);body.addView(hero,new LinearLayout.LayoutParams(-1,dp(side-67)));
+        if(primary!=null){FrameLayout.LayoutParams scroll=(FrameLayout.LayoutParams)currentScroll.getLayoutParams();scroll.topMargin=0;currentScroll.setLayoutParams(scroll);body.setPadding(0,0,0,dp(24));scrollBehindEdge();FrameLayout hero=new FrameLayout(this);hero.setTag("hero");body.addView(hero,new LinearLayout.LayoutParams(-1,dp(side-67)));
             // With no pins yet, the hero moves up to make room for one hint line.
             boolean hint=pinned.isEmpty()&&!pinHintDone()&&(preview||botsCached);int lift=hint?18:0;
             BotAvatarView face=new BotAvatarView(this);applyAvatar(face,primary.optString("name"),primary);face.state("ready",WHITE,0);face.running(visible);avatars.add(face);face.setContentDescription(primary.optString("name")+", Primary Bot"+(primary.optBoolean("awaiting")?", needs you":"")+". Open chat");face.setOnClickListener(v->{navigation++;primaryAction(primary,false);});int faceSize=compactHero()?48:64;FrameLayout.LayoutParams fp=new FrameLayout.LayoutParams(dp(faceSize),dp(faceSize),Gravity.TOP|Gravity.CENTER_HORIZONTAL);fp.topMargin=dp((compactHero()?30:side*.34f-32)-lift);hero.addView(face,fp);
-            TextView star=text("★",16,WHITE);GradientDrawable badge=shape(0xffff9800,12);badge.setStroke(dp(2),Color.BLACK);star.setBackground(badge);star.setContentDescription("Primary Bot");FrameLayout.LayoutParams st=new FrameLayout.LayoutParams(dp(23),dp(23),Gravity.TOP|Gravity.CENTER_HORIZONTAL);st.leftMargin=dp(22);st.topMargin=fp.topMargin+dp(faceSize-21);hero.addView(star,st);
+            TextView star=text("★",14,Look.onPrimary);GradientDrawable badge=shape(Look.primary,12);badge.setStroke(dp(2),Look.BACKGROUND);star.setBackground(badge);star.setContentDescription("Primary Bot");FrameLayout.LayoutParams st=new FrameLayout.LayoutParams(dp(23),dp(23),Gravity.TOP|Gravity.CENTER_HORIZONTAL);st.leftMargin=dp(22);st.topMargin=fp.topMargin+dp(faceSize-21);hero.addView(star,st);
             TextView name=text(primary.optString("name"),getResources().getConfiguration().fontScale>1.2f?12:16,WHITE);name.setSingleLine(true);name.setEllipsize(android.text.TextUtils.TruncateAt.END);FrameLayout.LayoutParams np=new FrameLayout.LayoutParams(dp(side*.76f),dp(22),Gravity.TOP|Gravity.CENTER_HORIZONTAL);np.topMargin=dp((compactHero()?80:side*.535f-11)-lift);hero.addView(name,np);TextView sub=text(MessageText.plain(primary.optString("lastMessagePreview","Ready to talk")),compactHero()?11:12,SECONDARY);sub.setTag("bot_excerpt");if(primary.optBoolean("awaiting")){sub.setText(needsYou(MessageText.plain(primary.optString("lastMessagePreview",""))));sub.setTag("bot_status");}sub.setSingleLine(true);sub.setEllipsize(android.text.TextUtils.TruncateAt.END);FrameLayout.LayoutParams xp=new FrameLayout.LayoutParams(dp(side*.76f),dp(20),Gravity.TOP|Gravity.CENTER_HORIZONTAL);xp.topMargin=dp(Math.min(side-88,side*.615f-10)-lift);hero.addView(sub,xp);
             if(hint){TextView line=text("Hold a Bot to pin it",12,SECONDARY);line.setCompoundDrawablesRelativeWithIntrinsicBounds(new PinGlyph(SECONDARY,12,false,false),null,null,null);line.setCompoundDrawablePadding(dp(4));FrameLayout.LayoutParams hp=new FrameLayout.LayoutParams(-2,dp(18),Gravity.TOP|Gravity.CENTER_HORIZONTAL);hp.topMargin=xp.topMargin+dp(22);hero.addView(line,hp);}
-            Button talk=button("Talk to "+primary.optString("name","your Primary Bot"),()->primaryAction(primary,true));styleHomeTalk(talk,primary.optString("name","your Primary Bot"));talk.setTag("home_primary_talk");talk.setTextColor(Color.BLACK);talk.setBackground(edgeShape(WHITE));talk.setEnabled(!historyStaging()&&!botSelectionPending);FrameLayout.LayoutParams ep=edgeParams();root.addView(talk,ep);
-            LinearLayout list=new LinearLayout(this);list.setOrientation(LinearLayout.VERTICAL);list.setPadding(dp(side*.12f),dp(10),dp(side*.12f),0);body.addView(list,new LinearLayout.LayoutParams(-1,-2));body=list;
+            Button talk=button("Talk to "+primary.optString("name","your Primary Bot"),()->primaryAction(primary,true));styleTalk(talk);talk.setContentDescription("Talk to "+primary.optString("name","your Primary Bot"));talk.setTag("home_primary_talk");talk.setTextColor(Look.onPrimary);talk.setBackground(edgeShape(Look.primary));talk.setEnabled(!historyStaging()&&!botSelectionPending);FrameLayout.LayoutParams ep=edgeParams();root.addView(talk,ep);
+            LinearLayout list=new LinearLayout(this);list.setTag("list");list.setOrientation(LinearLayout.VERTICAL);list.setPadding(dp(side*.055f),dp(10),dp(side*.055f),0);body.addView(list,new LinearLayout.LayoutParams(-1,-2));body=list;
             if(!pinned.isEmpty())pinnedGrid(pinned);
             // Every other Bot pinned: no empty "Bots" header. With desktop sections, each section has its own.
-            if((pinned.isEmpty()||bots.length()-1>pinned.size())&&sectionGroups(primary,pinned)==null)label("Bots",17,WHITE);
-        }else{TextView title=label("Bots",17,WHITE);title.setTypeface(font(600));
+            if((pinned.isEmpty()||bots.length()-1>pinned.size())&&sectionGroups(primary,pinned)==null)listHeader("Bots");
+        }else{wideList();title("Bots");
             if(pickToCall)label("Choose a Bot to call",12,WHITE);
             else if(!preview&&preferencesKnown&&bots.length()>0)label("No main Bot. Choose one in the Grok Bot app on your phone.",12,SECONDARY);
             gap(8);if(!pinned.isEmpty())pinnedGrid(pinned);}
-        addBotScrollIndicator();
         if(preview&&bots.length()<2){if(primary==null)botChip("Main Bot",BLUE,()->choosePreview("Main Bot"),previewBot("Main Bot","Latest reply from your Bot",true));botChip("Research Bot",BLUE,()->choosePreview("Research Bot"),previewBot("Research Bot","Your task update is ready",false));action("Settings",()->openSettings());return;}
         if(botsLoading&&!botsCached){loadingLine=label(loadingText(),12,SECONDARY);main.removeCallbacks(loadingTick);main.postDelayed(loadingTick,1000);}if(botSelectionPending)label("Switching Bot…",12,SECONDARY);
         if(bots.length()==0&&!botsCached&&!selectedMetadata.optString("id","").isEmpty())botChip(botName,BLUE,()->chooseBot(selectedMetadata.optString("id")),selectedMetadata);
@@ -503,24 +557,24 @@ public final class MainActivity extends Activity {
         return groups;
     }
     /** A desktop sidebar section's name above its Bots, styled like the "Pinned" heading. */
-    private void sectionHeading(String name){TextView heading=label(name,12,SECONDARY);heading.setTypeface(font(500));heading.setAccessibilityHeading(true);heading.setSingleLine(true);heading.setEllipsize(android.text.TextUtils.TruncateAt.END);((LinearLayout.LayoutParams)heading.getLayoutParams()).topMargin=dp(10);}
+    private void sectionHeading(String name){listHeader(name);}
     private void botChip(String name,int accent,Runnable action){botChip(name,accent,action,null);}
     private void botChip(String name,int accent,Runnable action,JSONObject metadata){
-        LinearLayout row=new LinearLayout(this);row.setGravity(Gravity.CENTER_VERTICAL);row.setPadding(dp(10),0,dp(10),0);row.setBackground(shape(CARD_ROW,25));row.setClickable(true);row.setFocusable(true);row.setContentDescription(name);row.setOnClickListener(v->{navigation++;action.run();});row.setEnabled(!botSelectionPending);
+        LinearLayout row=new LinearLayout(this);row.setGravity(Gravity.CENTER_VERTICAL);row.setPadding(dp(10),0,dp(10),0);row.setBackground(ripple(shape(CARD_ROW,26)));row.setClickable(true);row.setFocusable(true);row.setContentDescription(name);row.setOnClickListener(v->{navigation++;action.run();});row.setEnabled(!botSelectionPending);
         boolean selected=preview?name.equals(botName):metadata!=null&&!selectedMetadata.optString("id","").isEmpty()&&metadata.optString("id","").equals(selectedMetadata.optString("id"));
         row.setSelected(selected);if(selected)row.setStateDescription("Selected");
         boolean working=working(metadata),awaiting=metadata!=null&&metadata.optBoolean("awaiting");int unread=metadata==null?0:Math.max(0,metadata.optInt("unreadCount",0));boolean hasUnread=metadata!=null&&(unread>0||metadata.optBoolean("hasUnread"));
         // Avatar with a green dot while the Bot is working, like the live status in Grok Bot's watch views.
         FrameLayout avatar=new FrameLayout(this);BotAvatarView face=new BotAvatarView(this);applyAvatar(face,name,metadata);face.state("ready",BLUE,0);face.running(visible);avatars.add(face);avatar.addView(face,new FrameLayout.LayoutParams(dp(34),dp(34)));
         if(working)avatar.addView(statusDot(GREEN,CARD_ROW),dotAt(10,24,24));row.addView(avatar,new LinearLayout.LayoutParams(dp(34),dp(34)));
-        TextView nameLabel=text(name,15,WHITE);nameLabel.setTag("bot_name");nameLabel.setSingleLine(true);nameLabel.setEllipsize(android.text.TextUtils.TruncateAt.END);LinearLayout names=new LinearLayout(this);names.setOrientation(LinearLayout.VERTICAL);nameLabel.setGravity(Gravity.START);names.addView(nameLabel,new LinearLayout.LayoutParams(-1,-2));
+        TextView nameLabel=text(name,Look.LABEL_M,WHITE);nameLabel.setTypeface(font(500));nameLabel.setTag("bot_name");nameLabel.setSingleLine(true);nameLabel.setEllipsize(android.text.TextUtils.TruncateAt.END);LinearLayout names=new LinearLayout(this);names.setOrientation(LinearLayout.VERTICAL);nameLabel.setGravity(Gravity.START);names.addView(nameLabel,new LinearLayout.LayoutParams(-1,-2));
         // Second line: "Needs you" while the Bot waits for you, "Working…" while busy, else the latest message, else the Bot's role.
         String previewText=metadata==null?"":metadata.optString("lastMessagePreview",""),role=metadata==null?"":metadata.optString("title","");
         String second=working?"Working…":!previewText.isEmpty()?MessageText.plain(previewText):role;
         if(awaiting||!second.isEmpty()){TextView sub=text(second,12,working&&!awaiting?GREEN:SECONDARY);if(awaiting)sub.setText(needsYou(previewText.isEmpty()?"":MessageText.plain(previewText)));
             sub.setTag(awaiting||working?"bot_status":"bot_excerpt");sub.setSingleLine(true);sub.setEllipsize(android.text.TextUtils.TruncateAt.END);sub.setGravity(Gravity.START);names.addView(sub,new LinearLayout.LayoutParams(-1,-2));}
         LinearLayout.LayoutParams np=new LinearLayout.LayoutParams(0,-2,1);np.leftMargin=dp(8);row.addView(names,np);
-        if(hasUnread){View badge=unreadBadge(unread);LinearLayout.LayoutParams ub=new LinearLayout.LayoutParams(-2,dp(unread>0?18:8));ub.leftMargin=dp(4);row.addView(badge,ub);}
+        if(hasUnread){View badge=unreadBadge(unread);LinearLayout.LayoutParams ub=new LinearLayout.LayoutParams(unread>0?-2:dp(8),dp(unread>0?18:8));ub.leftMargin=dp(4);row.addView(badge,ub);}
         row.setContentDescription(name+(awaiting?", needs you":"")+(working?", working":"")+(unread>0?", "+unread+" unread":hasUnread?", unread":""));
         if(selected){TextView check=text("✓",16,BLUE);check.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);row.addView(check,new LinearLayout.LayoutParams(dp(20),-2));}
         if(metadata!=null&&!metadata.optString("id","").isEmpty()&&!isPrimaryId(metadata.optString("id")))row.setOnLongClickListener(v->{openBotActions(metadata);return true;});
@@ -555,7 +609,7 @@ public final class MainActivity extends Activity {
     private void markPinHintDone(){if(preview||pinHintDone())return;try{getSharedPreferences("grokwear_ui",MODE_PRIVATE).edit().putBoolean("pin_hint_done",true).apply();}catch(Exception unavailable){}}
     /** Two columns of 74 × 70 dp tiles. Nine or more pins fold to seven tiles and a "+N" tile. */
     private void pinnedGrid(java.util.List<JSONObject> pins){
-        TextView heading=label("Pinned",12,SECONDARY);heading.setTypeface(font(500));heading.setAccessibilityHeading(true);heading.getLayoutParams().height=dp(24);
+        listHeader("Pinned");
         boolean folded=pins.size()>8&&!pinGridExpanded;int shown=folded?7:pins.size(),cells=shown+(folded?1:0);LinearLayout row=null;
         for(int i=0;i<cells;i++){
             if(i%2==0){row=new LinearLayout(this);row.setGravity(Gravity.CENTER_HORIZONTAL);LinearLayout.LayoutParams rp=new LinearLayout.LayoutParams(-1,dp(70));if(i>0)rp.topMargin=dp(6);body.addView(row,rp);}
@@ -606,7 +660,7 @@ public final class MainActivity extends Activity {
         TextView title=label(name,15,WHITE);title.setTypeface(font(500));title.setSingleLine(true);title.setEllipsize(android.text.TextUtils.TruncateAt.END);gap(2);
         View[] pin=pinViews(bot,true);if(pin[0]!=null)body.addView(pin[0],new LinearLayout.LayoutParams(-1,-2));
         LinearLayout.LayoutParams pp=new LinearLayout.LayoutParams(-1,dp(48));pp.topMargin=dp(6);body.addView(pin[1],pp);
-        Button talk=action("Talk",()->{actionsBot=null;screen="bots";primaryAction(bot,true);});styleTalk(talk);talk.setTextColor(Color.BLACK);talk.setBackground(shape(WHITE,24));talk.setContentDescription("Talk to "+name);
+        Button talk=action("Talk",()->{actionsBot=null;screen="bots";primaryAction(bot,true);});styleTalk(talk);talk.setTextColor(Look.onPrimary);talk.setBackground(shape(Look.primary,26));talk.setContentDescription("Talk to "+name);
         action("Open chat",()->{actionsBot=null;screen="bots";primaryAction(bot,false);});
     }
     /** The pin control and the line above it: an error, pins full, offline, or "Pinned" on the Bot page. */
@@ -717,7 +771,7 @@ public final class MainActivity extends Activity {
         private final android.graphics.Paint p=new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
         @Override public int getIntrinsicWidth(){return dp(18);}@Override public int getIntrinsicHeight(){return dp(18);}
         @Override public void draw(android.graphics.Canvas canvas){android.graphics.Rect b=getBounds();canvas.save();canvas.translate(b.left,b.top);canvas.scale(b.width()/24f,b.height()/24f);
-            p.setColor(Color.BLACK);p.setStyle(android.graphics.Paint.Style.FILL);
+            p.setColor(Look.onPrimary);p.setStyle(android.graphics.Paint.Style.FILL);
             android.graphics.Path plane=new android.graphics.Path();plane.moveTo(3,20.5f);plane.lineTo(21.5f,12);plane.lineTo(3,3.5f);plane.lineTo(3,10);plane.lineTo(15,12);plane.lineTo(3,14);plane.close();canvas.drawPath(plane,p);canvas.restore();}
         @Override public void setAlpha(int alpha){p.setAlpha(alpha);}@Override public void setColorFilter(android.graphics.ColorFilter filter){p.setColorFilter(filter);}@Override public int getOpacity(){return android.graphics.PixelFormat.TRANSLUCENT;}
     }
@@ -745,7 +799,7 @@ public final class MainActivity extends Activity {
     private boolean hasCurrentReceipt(){return !receiptIdentity.isEmpty()&&receiptIdentity.equals(currentConversationIdentity());}
     private boolean takeOwnHistoryRefresh(boolean active,boolean staging){if(active||staging||historyLoading||!receiptRefreshPending||!screen.equals("ready")||!hasCurrentReceipt())return false;receiptRefreshPending=false;return true;}
     private void edgeTalk(){
-        Button talk=button("Start voice chat",()->talk());styleTalk(talk);talk.setTextColor(Color.BLACK);talk.setBackground(edgeShape(WHITE));talk.setEnabled(!historyStaging()&&!botSelectionPending);
+        Button talk=button("Start voice chat",()->talk());styleTalk(talk);talk.setTextColor(Look.onPrimary);talk.setBackground(edgeShape(Look.primary));talk.setEnabled(!historyStaging()&&!botSelectionPending);
         FrameLayout.LayoutParams ep=edgeParams();root.addView(talk,ep);
     }
     private void ready(){
@@ -753,17 +807,23 @@ public final class MainActivity extends Activity {
         FrameLayout.LayoutParams sp=(FrameLayout.LayoutParams)currentScroll.getLayoutParams();sp.topMargin=0;currentScroll.setLayoutParams(sp);body.setPadding(0,0,0,dp(28));scrollBehindEdge();
         // A Bot other than the Primary gets a compact hero with its pin control under the name.
         JSONObject pinBot=currentPinBot();View[] pin=pinBot==null?null:pinViews(pinBot,false);boolean caption=pin!=null&&pin[0]!=null;
-        FrameLayout hero=new FrameLayout(this);hero.setMinimumHeight(dp(side-67));body.addView(hero,new LinearLayout.LayoutParams(-1,pin==null?dp(side-67):-2));
-        Button back=button("Bots",()->openBotPicker());back.setText("‹ Bots");back.setTextSize(12);back.setPadding(0,0,0,0);back.setBackground(shape(Color.TRANSPARENT,0));back.setElevation(0);back.setStateListAnimator(null);FrameLayout.LayoutParams navp=new FrameLayout.LayoutParams(dp(68),dp(48),Gravity.TOP|Gravity.CENTER_HORIZONTAL);navp.topMargin=dp(pin!=null?-6:3);hero.addView(back,navp);
-        BotAvatarView face=new BotAvatarView(this);applyAvatar(face,botName,selectedMetadata);face.state(screen.equals("done")?"done":"ready",accent(),0);face.running(visible);avatars.add(face);int faceSize=pin!=null?(caption?40:47):compactHero()?48:64;FrameLayout.LayoutParams fp=new FrameLayout.LayoutParams(dp(faceSize),dp(faceSize),Gravity.TOP|Gravity.CENTER_HORIZONTAL);fp.topMargin=dp(pin!=null?(caption?22:21):compactHero()?30:side*.34f-32);hero.addView(face,fp);
-        TextView name=text(botName,getResources().getConfiguration().fontScale>1.2f?12:16,WHITE);name.setTypeface(font(600));name.setSingleLine(true);name.setEllipsize(android.text.TextUtils.TruncateAt.END);name.setContentDescription("Current Bot: "+botName);FrameLayout.LayoutParams np=new FrameLayout.LayoutParams(dp(side*.76f),dp(22),Gravity.TOP|Gravity.CENTER_HORIZONTAL);np.topMargin=dp(pin!=null?(caption?57:64):compactHero()?80:side*.535f-11);hero.addView(name,np);
+        FrameLayout hero=new FrameLayout(this);hero.setTag("hero");hero.setMinimumHeight(dp(side-67));body.addView(hero,new LinearLayout.LayoutParams(-1,pin==null?dp(side-67):-2));
+        BotAvatarView face=new BotAvatarView(this);applyAvatar(face,botName,selectedMetadata);face.state(screen.equals("done")?"done":"ready",accent(),0);face.running(visible);avatars.add(face);int faceSize=pin!=null?(caption?40:47):compactHero()?48:64;FrameLayout.LayoutParams fp=new FrameLayout.LayoutParams(dp(faceSize),dp(faceSize),Gravity.TOP|Gravity.CENTER_HORIZONTAL);fp.topMargin=dp(pin!=null?(caption?32:31):compactHero()?30:side*.34f-32);hero.addView(face,fp);
+        TextView name=text(botName,getResources().getConfiguration().fontScale>1.2f?12:16,WHITE);name.setTypeface(font(600));name.setSingleLine(true);name.setEllipsize(android.text.TextUtils.TruncateAt.END);name.setContentDescription("Current Bot: "+botName);FrameLayout.LayoutParams np=new FrameLayout.LayoutParams(dp(side*.76f),dp(22),Gravity.TOP|Gravity.CENTER_HORIZONTAL);np.topMargin=dp(pin!=null?(caption?67:74):compactHero()?80:side*.535f-11);hero.addView(name,np);
         if(pin!=null){LinearLayout stack=new LinearLayout(this);stack.setOrientation(LinearLayout.VERTICAL);stack.setGravity(Gravity.CENTER_HORIZONTAL);
             if(caption){pin[0].setLayoutParams(new LinearLayout.LayoutParams(-2,-2));stack.addView(pin[0]);}
             stack.addView(pin[1],new LinearLayout.LayoutParams(-2,dp(48)));
             FrameLayout.LayoutParams sp2=new FrameLayout.LayoutParams(dp(side*.76f),-2,Gravity.TOP|Gravity.CENTER_HORIZONTAL);sp2.topMargin=np.topMargin+dp(22);hero.addView(stack,sp2);}
         else{String last="";if(historyEntries.length()>0){JSONObject entry=historyEntries.optJSONObject(historyEntries.length()-1);if(entry!=null)last=entry.optString("text");}if(last.isEmpty())last=selectedMetadata.optString("lastMessagePreview","");
             TextView excerpt=text(last.isEmpty()?(preview?"Ready when you are":"Ready to talk"):MessageText.plain(last),compactHero()?11:12,SECONDARY);excerpt.setTag("bot_excerpt");excerpt.setSingleLine(true);excerpt.setEllipsize(android.text.TextUtils.TruncateAt.END);FrameLayout.LayoutParams xp=new FrameLayout.LayoutParams(dp(side*.76f),dp(20),Gravity.TOP|Gravity.CENTER_HORIZONTAL);xp.topMargin=dp(Math.min(side-88,side*.615f-10));hero.addView(excerpt,xp);}
-        LinearLayout chat=new LinearLayout(this);chat.setOrientation(LinearLayout.VERTICAL);chat.setPadding(dp(side*.12f),dp(10),dp(side*.12f),0);body.addView(chat,new LinearLayout.LayoutParams(-1,-2));body=chat;label("Chat",17,WHITE);messageButton();if(historyLoading&&historyEntries.length()==0)label("Loading history…",12,SECONDARY);if(historyStale)label("Showing last loaded messages",12,SECONDARY);if(!historyError.isEmpty())label(historyError,12,SECONDARY);
+        LinearLayout chat=new LinearLayout(this);chat.setOrientation(LinearLayout.VERTICAL);chat.setPadding(dp(side*.12f),dp(10),dp(side*.12f),0);body.addView(chat,new LinearLayout.LayoutParams(-1,-2));body=chat;
+        // Swipe goes back too; these small buttons are for anyone who doesn't know the gesture. Above the chat, so
+        // "scroll to the newest message" still ends on a message.
+        LinearLayout nav=new LinearLayout(this);nav.setGravity(Gravity.CENTER);
+        nav.addView(compact("Bots",R.drawable.ic_m_list,()->openBotPicker()),new LinearLayout.LayoutParams(-2,dp(36)));
+        LinearLayout.LayoutParams gear=new LinearLayout.LayoutParams(dp(36),dp(36));gear.leftMargin=dp(6);Button settingsButton=compact("",R.drawable.ic_m_settings,()->openSettings());settingsButton.setContentDescription("Settings");nav.addView(settingsButton,gear);
+        body.addView(nav,new LinearLayout.LayoutParams(-1,-2));
+        listHeader("Chat");messageButton();if(historyLoading&&historyEntries.length()==0)label("Loading history…",12,SECONDARY);if(historyStale)label("Showing last loaded messages",12,SECONDARY);if(!historyError.isEmpty())label(historyError,12,SECONDARY);
         if(historyEntries.length()==0&&!historyLoading)label("No messages loaded",12,SECONDARY);
         chat.setTag("chat");boolean newest=newestFirst();int count=historyEntries.length();
         // Grok's usage-limit notice takes the delivery line of the message it answers, else sits at the chat's newest end.
@@ -785,8 +845,15 @@ public final class MainActivity extends Activity {
         bubble.setContentDescription(who+": "+value+". Tap to read");bubble.setFocusable(true);bubble.setClickable(true);
         // A tap opens the whole message full screen, in larger text, scrolled with the crown.
         bubble.setOnClickListener(v->{navigation++;readerEntry=entry;readerReturnY=currentScroll==null?0:currentScroll.getScrollY();screen="reader";render();});
-        bubble.setPadding(dp(10),dp(8),dp(10),dp(8));bubble.setBackground(shape(entry.optString("role").equals("user")?userBubble():CARD,14));LinearLayout.LayoutParams bp=(LinearLayout.LayoutParams)bubble.getLayoutParams();bp.topMargin=dp(6);bubble.setLayoutParams(bp);
+        boolean mine=entry.optString("role").equals("user");bubble.setPadding(dp(12),dp(9),dp(12),dp(9));bubble.setTextColor(mine?Look.onPrimaryContainer:WHITE);
+        bubble.setBackground(ripple(bubbleShape(mine?Look.primaryContainer:CARD,mine)));bubble.setMaxWidth(dp(side*.76f*.9f));
+        LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(-2,-2);bp.gravity=mine?Gravity.END:Gravity.START;bp.topMargin=dp(6);bubble.setLayoutParams(bp);
     }
+    /** A chat bubble: round corners, with the one nearest its sender tighter, like a speech bubble's tail. */
+    private GradientDrawable bubbleShape(int color,boolean mine){GradientDrawable d=new GradientDrawable();d.setColor(color);float r=dp(18),t=dp(6);
+        d.setCornerRadii(mine?new float[]{r,r,r,r,t,t,r,r}:new float[]{r,r,r,r,r,r,t,t});return d;}
+    /** A list's header, as Wear's ListHeader: centred, title-small, quieter than the screen title. */
+    private void listHeader(String name){TextView h=label(name,Look.TITLE_S,SECONDARY);h.setTypeface(font(500));h.setAccessibilityHeading(true);h.setSingleLine(true);h.setEllipsize(android.text.TextUtils.TruncateAt.END);h.setPadding(0,dp(10),0,dp(4));}
     /** Message text with **bold** key words and numbers kept bold. */
     private CharSequence rich(String raw){
         MessageText.Styled styled=MessageText.styled(raw);android.text.SpannableString text=new android.text.SpannableString(styled.text);
@@ -818,23 +885,23 @@ public final class MainActivity extends Activity {
     }
     /** Review before sending, like Grok Bot's watch views: the text, Edit, and a big Send. */
     private void composeReview(){
-        body.setPadding(dp(side*.12f),dp(20),dp(side*.12f),dp(8));
+        body.setPadding(dp(side*.12f),dp(34),dp(side*.12f),dp(8));
         // Inset further than the card so a long Bot name wraps inside the round edge.
         // An answer to a question from the Bot's phone call goes to whoever asks it, through the Bot.
         String asked=answering==null?"":answering.optString("askedBy");
         TextView title=label(answering==null?"Send to "+botName+"?":"Answer "+(asked.isEmpty()?"the call":asked)+"?",14,WHITE);title.setTypeface(font(500));title.setMaxLines(2);title.setEllipsize(android.text.TextUtils.TruncateAt.END);title.setPadding(dp(side*.06f),0,dp(side*.06f),0);gap(4);
-        TextView card=label(draftMessage,14,WHITE);card.setGravity(Gravity.START);card.setPadding(dp(12),dp(8),dp(12),dp(8));card.setBackground(shape(GLASS,20));card.setMaxLines(8);card.setEllipsize(android.text.TextUtils.TruncateAt.END);card.setContentDescription("Message: "+draftMessage);
+        TextView card=label(draftMessage,14,Look.onPrimaryContainer);card.setGravity(Gravity.START);card.setPadding(dp(14),dp(10),dp(14),dp(10));card.setBackground(bubbleShape(Look.primaryContainer,true));card.setMaxLines(8);card.setEllipsize(android.text.TextUtils.TruncateAt.END);card.setContentDescription("Message: "+draftMessage);
         gap(6);
         LinearLayout row=new LinearLayout(this);row.setGravity(Gravity.CENTER);
-        Button change=button("Edit",()->{editDraft=draftMessage;screen="compose_edit";render();});change.setCompoundDrawablesRelativeWithIntrinsicBounds(new PencilGlyph(),null,null,null);change.setCompoundDrawablePadding(dp(6));change.setPadding(dp(16),0,dp(16),0);change.setEnabled(!messageSending);
-        row.addView(change,new LinearLayout.LayoutParams(-2,dp(40)));body.addView(row,new LinearLayout.LayoutParams(-1,-2));
+        Button change=button("Edit",()->{editDraft=draftMessage;screen="compose_edit";render();});iconize(change,R.drawable.ic_m_edit,Look.primary);change.setPadding(dp(16),0,dp(18),0);change.setEnabled(!messageSending);
+        row.addView(change,new LinearLayout.LayoutParams(-2,dp(44)));body.addView(row,new LinearLayout.LayoutParams(-1,-2));
         Button send=pinnedAction(messageSending?"Sending…":"Send",new SendGlyph(),()->sendDraft());send.setEnabled(!messageSending&&!draftMessage.isEmpty());send.setContentDescription(answering==null?"Send to "+botName:"Send your answer");
         if(!safeError.isEmpty()){gap(6);label(safeError,12,0xffff7a72);}
     }
     /** A big white button pinned above the bottom edge, like Talk, so it can never scroll off the round screen. */
     private Button pinnedAction(String value,android.graphics.drawable.Drawable icon,Runnable action){
         FrameLayout.LayoutParams sp=(FrameLayout.LayoutParams)currentScroll.getLayoutParams();sp.topMargin=0;currentScroll.setLayoutParams(sp);scrollBehindEdge();
-        Button b=button(value,action);b.setTextColor(Color.BLACK);b.setBackground(edgeShape(WHITE));b.setTextSize(16);
+        Button b=button(value,action);b.setTextColor(Look.onPrimary);b.setBackground(edgeShape(Look.primary));b.setTextSize(16);
         if(icon!=null){b.setCompoundDrawablesRelativeWithIntrinsicBounds(icon,null,null,null);b.setCompoundDrawablePadding(dp(8));
             // Centres the icon and label together.
             int inset=Math.max(dp(8),(dp(side*EDGE_W)-icon.getIntrinsicWidth()-dp(8)-(int)Math.ceil(b.getPaint().measureText(value)))/2);b.setPadding(inset,dp(6),inset,dp(6));}
@@ -843,7 +910,7 @@ public final class MainActivity extends Activity {
     }
     /** Fix the text with the watch keyboard (dictation from the keyboard works too). */
     private void composeEdit(){
-        body.setPadding(dp(side*.12f),dp(24),dp(side*.12f),dp(8));
+        body.setPadding(dp(side*.12f),dp(34),dp(side*.12f),dp(8));
         label(answering==null?"Edit message":"Your answer",13,SECONDARY);gap(6);
         EditText field=new EditText(this);field.setText(editDraft);field.setTextColor(WHITE);field.setTextSize(15);field.setHint(answering==null?"Message "+botName:CallQuestions.placeholder(answering,botName));field.setHintTextColor(SECONDARY);
         field.setBackground(shape(GLASS,18));field.setPadding(dp(12),dp(10),dp(12),dp(10));
@@ -1078,7 +1145,7 @@ public final class MainActivity extends Activity {
             else if(approvalsSent.contains(entryId))status="Sent";
             else if(choices==null||teammate||approvalsElsewhere.contains(entryId))status=Approvals.elsewhere(approval);
             else{status="";boolean sending=approvalsSending.contains(entryId);
-                Button yes=action(sending?"Sending…":choices[0],()->answerApproval(approval,true));yes.setTextColor(Color.BLACK);yes.setBackground(shape(WHITE,24));yes.setEnabled(!sending&&!preview);
+                Button yes=action(sending?"Sending…":choices[0],()->answerApproval(approval,true));yes.setTextColor(Look.onPrimary);yes.setBackground(shape(Look.primary,26));yes.setEnabled(!sending&&!preview);
                 yes.setContentDescription(choices[0]+": "+question);
                 Button no=action(choices[1],()->answerApproval(approval,false));no.setEnabled(!sending&&!preview);no.setContentDescription(choices[1]+": "+question);}
             if(!status.isEmpty()){gap(4);TextView done=label(status,11,SECONDARY);done.setGravity(Gravity.START);}
@@ -1122,7 +1189,7 @@ public final class MainActivity extends Activity {
             if(line==null){callTimers.put(status,call.optLong("connectedAtMs"));tick();}
             if(ended||!pending.isEmpty())return;
             boolean sending=callsSending.contains(callId);
-            if(PhoneCalls.canTakeOver(call,own)){Button take=action("Take over",()->controlCall(call,true));take.setTextColor(Color.BLACK);take.setBackground(shape(WHITE,24));take.setEnabled(!sending&&!preview);
+            if(PhoneCalls.canTakeOver(call,own)){Button take=action("Take over",()->controlCall(call,true));take.setTextColor(Look.onPrimary);take.setBackground(shape(Look.primary,26));take.setEnabled(!sending&&!preview);
                 take.setContentDescription("Take over the call to "+call.optString("label"));}
             // Ending a call can't be undone, and a wrist brushes buttons: the first tap asks for a second (FEATURES-SPEC §3.5).
             if(PhoneCalls.canEnd(call,own)){boolean armed=callId.equals(callArmed);
@@ -1184,7 +1251,7 @@ public final class MainActivity extends Activity {
             if(deadline>0){gap(3);TextView left=label(CallQuestions.remaining(deadline,now),12,ORANGE);left.setGravity(Gravity.START);questionTimers.put(left,deadline);tick();}
             if(!own){gap(4);TextView elsewhere=label("Answer on your phone",11,SECONDARY);elsewhere.setGravity(Gravity.START);}
             else{boolean sending=questionsSending.contains(entryId);
-                Button send=action(sending?"Sending…":"Send",()->writeAnswer(question));send.setTextColor(Color.BLACK);send.setBackground(shape(WHITE,24));send.setEnabled(!sending&&!preview);send.setContentDescription("Answer: "+prompt);
+                Button send=action(sending?"Sending…":"Send",()->writeAnswer(question));send.setTextColor(Look.onPrimary);send.setBackground(shape(Look.primary,26));send.setEnabled(!sending&&!preview);send.setContentDescription("Answer: "+prompt);
                 Button skip=action("Skip",()->answerQuestion(question,null));skip.setEnabled(!sending&&!preview);skip.setContentDescription("Skip: "+prompt);}
             String error=questionErrors.containsKey(entryId)?questionErrors.get(entryId):"";
             if(!error.isEmpty()){gap(4);TextView problem=label(error,11,0xffff7a72);problem.setGravity(Gravity.START);}
@@ -1265,11 +1332,11 @@ public final class MainActivity extends Activity {
                     Button choice=action((picked?"✓ ":"")+label,()->{if(multi)togglePick(entryId,index);else answerWidget(widget,option.optString("value"));});
                     // A long label wraps rather than being cut.
                     LinearLayout.LayoutParams lp=(LinearLayout.LayoutParams)choice.getLayoutParams();lp.height=-2;choice.setLayoutParams(lp);choice.setMinHeight(dp(44));choice.setMinimumHeight(dp(44));choice.setPadding(dp(12),dp(8),dp(12),dp(8));
-                    if(picked){choice.setBackground(shape(WHITE,24));choice.setTextColor(Color.BLACK);}else if(option.optBoolean("danger"))choice.setTextColor(RED);
+                    if(picked){choice.setBackground(shape(Look.primary,26));choice.setTextColor(Look.onPrimary);}else if(option.optBoolean("danger"))choice.setTextColor(RED);
                     choice.setEnabled(!sending&&!preview);choice.setContentDescription(label+(caption.isEmpty()?"":", "+caption)+(multi?(picked?", selected":", not selected"):""));
                     if(!caption.isEmpty()){gap(2);TextView under=label(caption,11,SECONDARY);under.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);}
                 }
-                if(multi){Button done=action(sending?"Sending…":"Done",()->answerWidget(widget,Widgets.joinPicked(widget,picks)));done.setTextColor(Color.BLACK);done.setBackground(shape(WHITE,24));done.setEnabled(!picks.isEmpty()&&!sending&&!preview);}
+                if(multi){Button done=action(sending?"Sending…":"Done",()->answerWidget(widget,Widgets.joinPicked(widget,picks)));done.setTextColor(Look.onPrimary);done.setBackground(shape(Look.primary,26));done.setEnabled(!picks.isEmpty()&&!sending&&!preview);}
             }
             if(widget.optBoolean("allowCustom")){gap(4);TextView custom=label("Or answer in the chat below",11,SECONDARY);custom.setGravity(Gravity.START);}
             String error=widgetErrors.containsKey(entryId)?widgetErrors.get(entryId):"";
@@ -1328,7 +1395,7 @@ public final class MainActivity extends Activity {
         screen="ready";render();final ScrollView restored=currentScroll;final int y=readerReturnY;
         restored.post(()->{if(currentScroll==restored&&screen.equals("ready"))restored.scrollTo(0,y);});
     }
-    private int userBubble(){if(selectedMetadata.has("avatarDataUrl"))return GLASS;int color=accent();double[] rgb={Color.red(color)/255d,Color.green(color)/255d,Color.blue(color)/255d};for(int i=0;i<3;i++)rgb[i]=rgb[i]<=.04045?rgb[i]/12.92:Math.pow((rgb[i]+.055)/1.055,2.4);double luminance=.2126*rgb[0]+.7152*rgb[1]+.0722*rgb[2];return 1.05/(luminance+.05)>=4.5?color:GLASS;}
+    private int userBubble(){return Look.primaryContainer;}
     private String duration(long ms){return String.format(java.util.Locale.ROOT,"%d:%02d",Math.max(0,ms)/60000,(Math.max(0,ms)/1000)%60);}
     private void loadBotChat(){if(preview){previewHistory("history");screen="ready";render();return;}if(historyLoading||VoiceService.snapshot().active)return;historyAgent=selectedMetadata.optString("id");historyAccount=botsAccountBinding;loadHistory(false);
         String id=selectedMetadata.optString("id","");if(replyChecks==0)refreshMessages(id);markRead(id,false);}
@@ -1343,9 +1410,10 @@ public final class MainActivity extends Activity {
         callBot=text(botName,getResources().getConfiguration().fontScale>1.2f?12:15,WHITE);callBot.setTypeface(font(600));callBot.setSingleLine(true);callBot.setEllipsize(android.text.TextUtils.TruncateAt.END);callBot.setContentDescription("Current Bot: "+botName);placeCall(callBot,callCompact?.385f:.535f,22);
         LinearLayout status=new LinearLayout(this);status.setGravity(Gravity.CENTER);waveform=new WaveformView(this);waveform.setColor(accent());waveform.running(visible);status.addView(waveform,new LinearLayout.LayoutParams(dp(36),dp(18)));callStatus=text("",13,SECONDARY);callStatus.setSingleLine(true);callStatus.setEllipsize(android.text.TextUtils.TruncateAt.END);LinearLayout.LayoutParams statusText=new LinearLayout.LayoutParams(-2,-2);statusText.leftMargin=dp(10);status.addView(callStatus,statusText);placeCall(status,callCompact?.47f:.615f,22);
         callCaption=text(caption,getResources().getConfiguration().fontScale>1.2f?12:14,WHITE);callCaption.setMaxLines(side<200||getResources().getConfiguration().fontScale>1.2f?1:2);callCaption.setEllipsize(android.text.TextUtils.TruncateAt.END);callCaption.setOnClickListener(v->showCaption());placeCall(callCaption,.56f,side<200?24:40);FrameLayout.LayoutParams captionPosition=(FrameLayout.LayoutParams)callCaption.getLayoutParams();captionPosition.topMargin+=dp(7);callCaption.setLayoutParams(captionPosition);callHint=null;
-        LinearLayout controls=new LinearLayout(this);controls.setGravity(Gravity.CENTER);FrameLayout.LayoutParams cp=new FrameLayout.LayoutParams(dp(108),dp(48),Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL);cp.bottomMargin=dp(side*.04f);root.addView(controls,cp);
-        boolean muted=preview?previewMuted:VoiceService.snapshot().muted;callMute=button(muted?"Unmute":"Mute",()->toggleMute());callMute.setText("");callMute.setPadding(0,0,0,0);callMute.setForeground(new MicGlyph(muted,false));callMute.setForegroundGravity(Gravity.CENTER);callMute.setBackground(shape(GLASS,24));controls.addView(callMute,new LinearLayout.LayoutParams(dp(48),dp(48)));
-        Button end=button("Hang up",()->endCall());end.setText("×");end.setTextSize(28);end.setPadding(0,0,0,0);end.setBackground(shape(RED,24));LinearLayout.LayoutParams ep=new LinearLayout.LayoutParams(dp(48),dp(48));ep.leftMargin=dp(12);controls.addView(end,ep);
+        // Material 3 call controls: a round mic toggle and a wider red End pill, as Wear OS's call screens pair them.
+        LinearLayout controls=new LinearLayout(this);controls.setGravity(Gravity.CENTER);FrameLayout.LayoutParams cp=new FrameLayout.LayoutParams(dp(136),dp(52),Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL);cp.bottomMargin=dp(side*.04f);root.addView(controls,cp);
+        boolean muted=preview?previewMuted:VoiceService.snapshot().muted;callMute=button(muted?"Unmute":"Mute",()->toggleMute());callMute.setText("");callMute.setPadding(0,0,0,0);callMute.setForeground(micIcon(muted,false));callMute.setForegroundGravity(Gravity.CENTER);callMute.setBackground(shape(GLASS,26));controls.addView(callMute,new LinearLayout.LayoutParams(dp(52),dp(52)));
+        Button end=button("Hang up",()->endCall());end.setText("");end.setPadding(0,0,0,0);android.graphics.drawable.Drawable hang=getDrawable(R.drawable.ic_m_call_end).mutate();hang.setTint(END_ICON);end.setForeground(new android.graphics.drawable.InsetDrawable(hang,dp(20),dp(14),dp(20),dp(14)));end.setBackground(ripple(shape(END,26)));LinearLayout.LayoutParams ep=new LinearLayout.LayoutParams(dp(76),dp(52));ep.leftMargin=dp(8);controls.addView(end,ep);
         LinearLayout extra=new LinearLayout(this);extra.setOrientation(LinearLayout.VERTICAL);extra.setPadding(dp(side*.12f),dp(12),dp(side*.12f),0);body.addView(extra,new LinearLayout.LayoutParams(-1,-2));TextView heading=text("Voice chat transcript",15,WHITE);extra.addView(heading);transcriptBody=new LinearLayout(this);transcriptBody.setOrientation(LinearLayout.VERTICAL);extra.addView(transcriptBody);renderTranscript();extra.addView(text("Voice call settings",15,WHITE));extra.addView(text("Voice settings are managed on your phone or Mac.",12,SECONDARY));extra.addView(text("Hang up to switch Bots.",12,SECONDARY));updateCallText();main.postDelayed(callClock,1000);
         // On the screen, not the padded stage, so the arc follows the bezel beside the crown.
         volumeArc=new CallVolumeArc(this);volumeArc.setAccent(accent());root.addView(volumeArc,new FrameLayout.LayoutParams(-1,-1));
@@ -1354,25 +1422,13 @@ public final class MainActivity extends Activity {
     private final class VoiceGlyph extends android.graphics.drawable.Drawable {
         private final android.graphics.Paint p=new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
         @Override public int getIntrinsicWidth(){return dp(20);}@Override public int getIntrinsicHeight(){return dp(20);}
-        @Override public void draw(android.graphics.Canvas canvas){android.graphics.Rect b=getBounds();canvas.save();canvas.translate(b.left,b.top);canvas.scale(b.width()/20f,b.height()/20f);p.setColor(Color.BLACK);p.setStrokeCap(android.graphics.Paint.Cap.ROUND);p.setStrokeWidth(2.2f);float[] lengths={6,12,16,10,5};for(int i=0;i<5;i++)canvas.drawLine(3+i*3.5f,10-lengths[i]/2,3+i*3.5f,10+lengths[i]/2,p);canvas.restore();}
+        @Override public void draw(android.graphics.Canvas canvas){android.graphics.Rect b=getBounds();canvas.save();canvas.translate(b.left,b.top);canvas.scale(b.width()/20f,b.height()/20f);p.setColor(Look.onPrimary);p.setStrokeCap(android.graphics.Paint.Cap.ROUND);p.setStrokeWidth(2.2f);float[] lengths={6,12,16,10,5};for(int i=0;i<5;i++)canvas.drawLine(3+i*3.5f,10-lengths[i]/2,3+i*3.5f,10+lengths[i]/2,p);canvas.restore();}
         @Override public void setAlpha(int alpha){p.setAlpha(alpha);}@Override public void setColorFilter(android.graphics.ColorFilter filter){p.setColorFilter(filter);}@Override public int getOpacity(){return android.graphics.PixelFormat.TRANSLUCENT;}
     }
-    private final class MicGlyph extends android.graphics.drawable.Drawable {
-        private final boolean muted,resume;
-        private final android.graphics.Paint p=new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-        MicGlyph(boolean muted,boolean resume){this.muted=muted;this.resume=resume;}
-        @Override public int getIntrinsicWidth(){return dp(24);}
-        @Override public int getIntrinsicHeight(){return dp(24);}
-        @Override public void draw(android.graphics.Canvas canvas){
-            android.graphics.Rect bounds=getBounds();canvas.save();canvas.translate(bounds.left,bounds.top);canvas.scale(bounds.width()/24f,bounds.height()/24f);
-            p.setColor(WHITE);p.setStrokeWidth(1.8f);p.setStrokeCap(android.graphics.Paint.Cap.ROUND);p.setStyle(android.graphics.Paint.Style.STROKE);
-            if(resume){p.setStyle(android.graphics.Paint.Style.FILL);android.graphics.Path triangle=new android.graphics.Path();triangle.moveTo(7,3);triangle.lineTo(20,12);triangle.lineTo(7,21);triangle.close();canvas.drawPath(triangle,p);canvas.restore();return;}
-            canvas.drawRoundRect(9,2,15,14,3,3,p);canvas.drawArc(6,6,18,18,0,180,false,p);canvas.drawLine(12,18,12,22,p);canvas.drawLine(8,22,16,22,p);
-            if(muted)canvas.drawLine(3,3,21,21,p);canvas.restore();
-        }
-        @Override public void setAlpha(int alpha){p.setAlpha(alpha);}
-        @Override public void setColorFilter(android.graphics.ColorFilter filter){p.setColorFilter(filter);}
-        @Override public int getOpacity(){return android.graphics.PixelFormat.TRANSLUCENT;}
+    /** The call's mic toggle: Material's mic, mic-off while muted, or play while the call is paused. */
+    private android.graphics.drawable.Drawable micIcon(boolean muted,boolean resume){
+        android.graphics.drawable.Drawable d=getDrawable(resume?R.drawable.ic_m_play:muted?R.drawable.ic_m_mic_off:R.drawable.ic_m_mic).mutate();
+        d.setTint(muted&&!resume?Look.onSecondaryContainer:resume?Look.onPrimaryContainer:WHITE);return new android.graphics.drawable.InsetDrawable(d,dp(14));
     }
     private void renderTranscript(){if(transcriptBody==null)return;transcriptBody.removeAllViews();if(transcript.isEmpty())transcriptBody.addView(text("No speech transcribed yet",12,SECONDARY));for(String line:transcript){TextView t=text(MessageText.plain(line),14,line.startsWith("You: ")?SECONDARY:WHITE);t.setGravity(Gravity.START);t.setPadding(0,dp(6),0,dp(6));transcriptBody.addView(t);}}
     private String callLimitNotice(long elapsedMs){if(elapsedMs<240000)return "";long seconds=Math.max(0,(300000-elapsedMs+999)/1000);return seconds>=60?"1 min left":seconds+"s left";}
@@ -1389,7 +1445,7 @@ public final class MainActivity extends Activity {
             LinearLayout.LayoutParams p=(LinearLayout.LayoutParams)callStatus.getLayoutParams();int margin=showLimit?0:dp(10);if(p.leftMargin!=margin){p.leftMargin=margin;callStatus.setLayoutParams(p);}
         }
         if(waveform!=null)waveform.state(phase,preview?(phase.equals("speaking")?.55f:phase.equals("listening")?.22f:0):snap.muted?0:screen.equals("speaking")?snap.outputLevel:snap.inputLevel);
-        if(callMute!=null){boolean muted=preview?previewMuted:snap.muted;String muteLabel=phase.equals("paused")?"Resume":muted?"Unmute":"Mute";if(!muteLabel.contentEquals(callMute.getContentDescription())){callMute.setContentDescription(muteLabel);callMute.setForeground(new MicGlyph(muted,phase.equals("paused")));}int muteColor=phase.equals("paused")?BLUE:muted?0xff493725:GLASS;if(muteColor!=shownMuteColor){shownMuteColor=muteColor;callMute.setBackground(shape(muteColor,24));}callMute.setStateDescription(phase.equals("paused")?"Call paused. Tap to resume":muted?"Microphone muted. Bot audio stays on":"Microphone on");}
+        if(callMute!=null){boolean muted=preview?previewMuted:snap.muted;String muteLabel=phase.equals("paused")?"Resume":muted?"Unmute":"Mute";if(!muteLabel.contentEquals(callMute.getContentDescription())){callMute.setContentDescription(muteLabel);callMute.setForeground(micIcon(muted,phase.equals("paused")));}int muteColor=phase.equals("paused")?Look.primaryContainer:muted?Look.secondaryContainer:GLASS;if(muteColor!=shownMuteColor){shownMuteColor=muteColor;callMute.setBackground(ripple(shape(muteColor,26)));}callMute.setStateDescription(phase.equals("paused")?"Call paused. Tap to resume":muted?"Microphone muted. Bot audio stays on":"Microphone on");}
         // The on-screen line follows playback; the transcript below keeps the whole answer.
         String spoken=preview||captionLine.isEmpty()?caption:captionLine;
         if(callCaption!=null&&!spoken.equals(shownCaption)){shownCaption=spoken;callCaption.setText(MessageText.plain(spoken));callCaption.setVisibility(spoken.isEmpty()?View.GONE:View.VISIBLE);callCaption.setTextColor("You".equalsIgnoreCase(speaker)?SECONDARY:WHITE);callCaption.setContentDescription((speaker.isEmpty()?"":speaker+": ")+spoken);}
@@ -1440,7 +1496,7 @@ public final class MainActivity extends Activity {
     /** Primary action pinned above the bottom edge, like Talk: it can never scroll off a round screen. */
     private void edgeAction(String value,Runnable run){
         bottomAction=true;scrollBehindEdge();
-        Button primary=button(value,run);primary.setTextColor(Color.BLACK);primary.setBackground(edgeShape(WHITE));
+        Button primary=button(value,run);primary.setTextColor(Look.onPrimary);primary.setBackground(edgeShape(Look.primary));
         FrameLayout.LayoutParams ep=edgeParams();root.addView(primary,ep);
     }
     /** Real calls retry Talk directly; demo previews return to the Bot page. */
@@ -1473,13 +1529,11 @@ public final class MainActivity extends Activity {
         if(!id.equals(historyAgent)||!botsAccountBinding.equals(historyAccount))clearHistory();
         historyAgent=id;historyAccount=botsAccountBinding;screen="history";loadHistory(false);
     }
+    /** A history page's title, scrolling with the page under the time, with the Bot's name below it. */
     private void historyHeader(String heading,Runnable back){
-        LinearLayout bar=new LinearLayout(this);bar.setGravity(Gravity.CENTER_VERTICAL);
-        Button b=button("Back",back);b.setText("‹");b.setTextSize(24);b.setPadding(0,0,0,0);bar.addView(b,new LinearLayout.LayoutParams(dp(48),dp(48)));
-        LinearLayout titles=new LinearLayout(this);titles.setOrientation(LinearLayout.VERTICAL);titles.setGravity(Gravity.CENTER_VERTICAL);TextView title=text(heading,16,WHITE);title.setTypeface(font(600));title.setSingleLine(true);title.setEllipsize(android.text.TextUtils.TruncateAt.END);title.setIncludeFontPadding(false);titles.addView(title);TextView bot=text(botName,10,SECONDARY);bot.setSingleLine(true);bot.setEllipsize(android.text.TextUtils.TruncateAt.END);bot.setIncludeFontPadding(false);bot.setContentDescription("History for Bot: "+botName);titles.addView(bot);bar.addView(titles,new LinearLayout.LayoutParams(0,-1,1));
-        FrameLayout.LayoutParams hp=new FrameLayout.LayoutParams(dp(side*.76f),dp(48),Gravity.TOP|Gravity.CENTER_HORIZONTAL);hp.topMargin=dp(23);root.addView(bar,hp);
-        FrameLayout.LayoutParams sp=(FrameLayout.LayoutParams)currentScroll.getLayoutParams();sp.topMargin=dp(73);sp.bottomMargin=dp(14);currentScroll.setLayoutParams(sp);currentScroll.setVerticalScrollBarEnabled(true);
-        body.setPadding(dp(side*.12f),dp(2),dp(side*.12f),dp(30));
+        title(heading);
+        TextView who=label(botName,Look.BODY_S,SECONDARY);who.setSingleLine(true);who.setEllipsize(android.text.TextUtils.TruncateAt.END);who.setContentDescription("History for Bot: "+botName);
+        ((LinearLayout.LayoutParams)who.getLayoutParams()).topMargin=-dp(6);gap(8);
     }
     private void history(){
         historyHeader("History",()->goHome());
@@ -1491,15 +1545,19 @@ public final class MainActivity extends Activity {
         for(int i=historyEntries.length()-1;i>=0;i--){JSONObject entry=historyEntries.optJSONObject(i);if(entry==null)continue;
             String role=entry.optString("role"),who=role.equals("user")?"You":role.equals("assistant")?botName:"Conversation";
             String full=MessageText.plain(entry.optString("text",""));if(full.isEmpty())continue;
+            // A Material card: who and when on top in the quiet colour, then the message.
             Button row=action(who+": "+full,()->{navigation++;historyRequest++;historyLoading=false;historyDetail=entry;screen="history_detail";render();});
-            row.setContentDescription("Message from "+who+": "+full);row.setTextColor(WHITE);row.setBackground(shape(role.equals("user")?userBubble():CARD,14));row.setGravity(Gravity.START|Gravity.CENTER_VERTICAL);
-            row.setText((role.equals("assistant")?"Bot":who)+historyTime(entry)+"\n"+full);row.setMaxLines(3);row.setEllipsize(android.text.TextUtils.TruncateAt.END);
-            LinearLayout.LayoutParams rp=(LinearLayout.LayoutParams)row.getLayoutParams();rp.height=dp(getResources().getConfiguration().fontScale>1.2f?84:72);row.setLayoutParams(rp);
+            boolean mine=role.equals("user");row.setContentDescription("Message from "+who+": "+full);row.setTextColor(mine?Look.onPrimaryContainer:WHITE);row.setBackground(ripple(shape(mine?Look.primaryContainer:CARD,22)));row.setGravity(Gravity.START|Gravity.CENTER_VERTICAL);row.setPadding(dp(14),dp(10),dp(14),dp(10));
+            String head=(role.equals("assistant")?botName:who)+historyTime(entry);android.text.SpannableString card=new android.text.SpannableString(head+"\n"+full);
+            card.setSpan(new android.text.style.ForegroundColorSpan(mine?Look.alpha(Look.onPrimaryContainer,.8f):SECONDARY),0,head.length(),0);card.setSpan(new android.text.style.AbsoluteSizeSpan(12,true),0,head.length(),0);
+            row.setText(card);row.setTypeface(font(400));row.setTextSize(Look.BODY_M);row.setMaxLines(4);row.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            LinearLayout.LayoutParams rp=(LinearLayout.LayoutParams)row.getLayoutParams();rp.height=-2;row.setLayoutParams(rp);
         }
         label(historyBinding!=null&&!historyBinding.optString("sessionId").isEmpty()?"Selected conversation":"Main conversation",12,SECONDARY);
-        Button refresh=action("Refresh",()->loadHistory(false));refresh.setEnabled(!historyLoading);
+        Button refresh=action("Refresh",R.drawable.ic_m_refresh,()->loadHistory(false));refresh.setEnabled(!historyLoading);
         if(historyHasMore&&historyPages<5){Button older=action("Load older",()->loadHistory(true));older.setEnabled(!historyLoading);}
         else if(historyHasMore)label("Showing the latest 100 messages",12,SECONDARY);
+        action("Back",R.drawable.ic_m_back,()->goHome());
     }
     private String historyTime(JSONObject entry){long at=entry.optLong("atMs",0);return at>0?" · "+android.text.format.DateFormat.getTimeFormat(this).format(new java.util.Date(at)):"";}
     private void historyDetail(){
@@ -1507,6 +1565,7 @@ public final class MainActivity extends Activity {
         JSONObject entry=historyDetail==null?new JSONObject():historyDetail;String role=entry.optString("role"),who=role.equals("user")?"You":role.equals("assistant")?botName:"Conversation";
         label((role.equals("user")?"You · ":"")+botName+historyTime(entry),12,SECONDARY);TextView message=label(MessageText.plain(entry.optString("text","Message unavailable")),16,WHITE);message.setText(rich(entry.optString("text","Message unavailable")));
         message.setGravity(Gravity.START);message.setTextIsSelectable(true);message.setContentDescription("Full message from "+who+": "+entry.optString("text"));
+        gap(8);action("Back",R.drawable.ic_m_back,()->{screen="history";render();});
     }
     private boolean historyCurrent(int request,int mine,int route,String id,String binding){
         if(!visible||request!=historyRequest||mine!=epoch||route!=navigation||!(screen.equals("history")||screen.equals("ready")))return false;
@@ -1563,7 +1622,7 @@ public final class MainActivity extends Activity {
     /** Part of signing in: reply alerts are offered once per new sign-in, then the Bot list follows. */
     private void alertsSetup(){
         title("Reply alerts");label("Buzz when a Bot answers your message, even after you leave the app.",12,SECONDARY);
-        Button on=action("Turn on",()->finishAlertsSetup(true));on.setTextColor(Color.BLACK);on.setBackground(shape(WHITE,24));
+        Button on=action("Turn on",()->finishAlertsSetup(true));on.setTextColor(Look.onPrimary);on.setBackground(shape(Look.primary,26));
         action("Not now",()->finishAlertsSetup(false));
         label("Change this any time in Settings.",12,SECONDARY);
     }
@@ -1594,7 +1653,7 @@ public final class MainActivity extends Activity {
     private void buttonSetup(){
         title("Assistant button");JSONObject primary=preview?null:primaryBot();
         label("Hold the watch’s assistant button to call "+assistTarget(primary)+": the Home key on a Galaxy Watch, the crown on a Pixel Watch.",12,SECONDARY);
-        Button on=action("Turn on",()->finishButtonSetup(true));on.setTextColor(Color.BLACK);on.setBackground(shape(WHITE,24));
+        Button on=action("Turn on",()->finishButtonSetup(true));on.setTextColor(Look.onPrimary);on.setBackground(shape(Look.primary,26));
         action("Not now",()->finishButtonSetup(false));
         label("Grok Wear becomes the watch’s assistant in place of the current one. Change this any time in Settings.",12,SECONDARY);
     }
@@ -1722,29 +1781,59 @@ public final class MainActivity extends Activity {
     }
     private void openSettings(){settingsReturnScreen=screen.equals("ready")||screen.equals("done")?"ready":"bots";screen="settings";render();}
     private void leaveSettings(){screen=settingsReturnScreen.equals("ready")?"ready":"bots";render();}
-    private void settings(){title("Settings");boolean alerts=replyAlerts();
-        Button toggle=action("Reply alerts: "+(alerts?"On":"Off"),()->toggleReplyAlerts());toggle.setContentDescription("Reply alerts, "+(alerts?"on":"off")+". Double-tap to turn "+(alerts?"off":"on"));
-        label(alertsBlocked?"Allow notifications for Grok Wear in your watch’s settings, then try again.":"Buzz when a Bot answers your message.",12,SECONDARY);gap(8);
+    private void settings(){wideList();title("Settings");boolean alerts=replyAlerts();
+        switchRow("Reply alerts",alertsBlocked?"Allow notifications in watch settings":"Buzz when a Bot answers",alerts,R.drawable.ic_m_notifications,()->toggleReplyAlerts());
         boolean newest=newestFirst();
-        Button order=action("Newest first: "+(newest?"On":"Off"),()->{setNewestFirst(!newest);render();});order.setContentDescription("Newest messages first, "+(newest?"on":"off")+". Double-tap to turn "+(newest?"off":"on"));
-        label(newest?"A Bot’s chat starts with its newest message.":"A Bot’s chat ends with its newest message.",12,SECONDARY);gap(8);
+        switchRow("Newest first",newest?"Newest message on top":"Newest message last",newest,R.drawable.ic_m_sort,()->{setNewestFirst(!newest);render();});
         boolean silent=NativeAudio.silentReplies(this);
-        Button quiet=action("Silent replies: "+(silent?"On":"Off"),()->{NativeAudio.setSilentReplies(this,!silent);render();});quiet.setContentDescription("Silent replies, "+(silent?"on":"off")+". Double-tap to turn "+(silent?"off":"on"));
-        label(silent?"Calls show the Bot’s replies as text. Its voice stays muted. Starts with your next call.":"The Bot speaks its replies on calls.",12,SECONDARY);gap(8);
-        boolean button=buttonOn();
-        Button hold=action("Assistant button: "+(button?"On":"Off"),()->toggleButton());hold.setContentDescription("Assistant button, "+(button?"on":"off")+". Double-tap to open the watch’s assistant settings");
-        String target=assistTarget(preview?null:primaryBot());
-        label(button?"Hold the watch’s assistant button to call "+target+". To turn this off, choose another assistant.":"Hold the watch’s assistant button to call "+target+" (the Home key on a Galaxy Watch, the crown on a Pixel Watch). No extra battery.",12,SECONDARY);gap(8);
-        action("Report a problem",()->openReport("","settings"));gap(8);
-        label("Unofficial Grok client",12,SECONDARY);label("Not affiliated with or endorsed by xAI or Cursor.",12,SECONDARY);gap(4);label("5-minute calls · tasks go to your Bot",12,SECONDARY);label("Calls share this Bot’s main chat.",12,SECONDARY);
-        action("Back",()->leaveSettings());gap(24);
-        action("Sign out…",()->{screen="signout_confirm";render();});
+        switchRow("Silent replies",silent?"Calls show replies as text":"The Bot speaks its replies",silent,R.drawable.ic_m_volume_off,()->{NativeAudio.setSilentReplies(this,!silent);render();});
+        boolean button=buttonOn();String target=assistTarget(preview?null:primaryBot());
+        switchRow("Assistant button",button?"Hold the watch’s assistant button to call "+target:"Off. Turn on to hold the assistant button (the crown on Pixel Watch) to call "+target,button,R.drawable.ic_m_sparkle,()->toggleButton());
+        if(Look.dynamicAvailable()||preview){boolean colors=Look.watchColors(this);
+            switchRow("Watch colors",colors?"Matches your watch face":"Grok Wear’s own blue",colors,R.drawable.ic_m_palette,()->{Look.setWatchColors(this,!colors);render();GrokTileService.refresh(this);});}
+        listHeader("Help");
+        action("Report a problem",R.drawable.ic_m_flag,()->openReport("","settings"));
+        Button out=action("Sign out…",R.drawable.ic_m_logout,()->{screen="signout_confirm";render();});out.setTextColor(Look.error);iconize(out,R.drawable.ic_m_logout,Look.error);
+        listHeader("About");
+        TextView about=label("Unofficial Grok client. Not affiliated with or endorsed by xAI or Cursor.\n5-minute calls · tasks go to your Bot · calls share this Bot’s main chat.",Look.BODY_S,SECONDARY);about.setPadding(dp(8),0,dp(8),0);
+        gap(8);action("Back",R.drawable.ic_m_back,()->leaveSettings());
+    }
+    /**
+     * A Material 3 switch button: icon, label and a line under it, with the switch at the end. On, the row takes the
+     * accent container, as Wear OS's switch buttons do. Talkback reads it as a switch with its state.
+     */
+    /** Lists of buttons run nearly edge to edge, as on Wear OS; rows near the top and bottom shrink to fit the circle. */
+    private void wideList(){body.setPadding(dp(side*.055f),body.getPaddingTop(),dp(side*.055f),body.getPaddingBottom());}
+    private void switchRow(String name,String detail,boolean on,int icon,Runnable toggle){
+        LinearLayout row=new LinearLayout(this);row.setGravity(Gravity.CENTER_VERTICAL);row.setPadding(dp(14),dp(8),dp(12),dp(8));row.setMinimumHeight(dp(52));
+        int content=on?Look.onPrimaryContainer:WHITE,quiet=on?Look.alpha(Look.onPrimaryContainer,.8f):SECONDARY;
+        row.setBackground(ripple(shape(on?Look.primaryContainer:GLASS,26)));row.setClickable(true);row.setFocusable(true);
+        ImageView glyph=new ImageView(this);android.graphics.drawable.Drawable d=getDrawable(icon).mutate();d.setTint(on?Look.onPrimaryContainer:Look.primary);glyph.setImageDrawable(d);glyph.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);row.addView(glyph,new LinearLayout.LayoutParams(dp(20),dp(20)));
+        LinearLayout words=new LinearLayout(this);words.setOrientation(LinearLayout.VERTICAL);
+        TextView label=text(name,Look.LABEL_M,content);label.setTypeface(font(500));label.setGravity(Gravity.START);words.addView(label,new LinearLayout.LayoutParams(-1,-2));
+        TextView under=text(detail,Look.BODY_S,quiet);under.setGravity(Gravity.START);under.setMaxLines(3);under.setPadding(0,dp(2),0,0);words.addView(under,new LinearLayout.LayoutParams(-1,-2));
+        LinearLayout.LayoutParams wp=new LinearLayout.LayoutParams(0,-2,1);wp.leftMargin=dp(8);wp.rightMargin=dp(6);row.addView(words,wp);
+        View knob=new View(this);knob.setBackground(new SwitchGlyph(on));knob.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);row.addView(knob,new LinearLayout.LayoutParams(dp(32),dp(20)));
+        row.setContentDescription(name+". "+detail);row.setStateDescription(on?"On":"Off");
+        row.setAccessibilityDelegate(new View.AccessibilityDelegate(){@Override public void onInitializeAccessibilityNodeInfo(View host,android.view.accessibility.AccessibilityNodeInfo info){super.onInitializeAccessibilityNodeInfo(host,info);info.setClassName(Switch.class.getName());info.setCheckable(true);info.setChecked(on);}});
+        row.setOnClickListener(v->{navigation++;v.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM);toggle.run();});
+        LinearLayout.LayoutParams rp=new LinearLayout.LayoutParams(-1,-2);rp.topMargin=dp(4);body.addView(row,rp);
+    }
+    /** Material 3's switch: a filled track with a large thumb when on, an outlined track with a small one when off. */
+    private final class SwitchGlyph extends android.graphics.drawable.Drawable {
+        private final boolean on;private final android.graphics.Paint p=new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        SwitchGlyph(boolean on){this.on=on;}
+        @Override public void draw(android.graphics.Canvas canvas){android.graphics.Rect b=getBounds();float h=b.height(),w=b.width(),r=h/2,stroke=dp(2);
+            android.graphics.RectF track=new android.graphics.RectF(b.left+stroke/2,b.top+stroke/2,b.right-stroke/2,b.bottom-stroke/2);
+            if(on){p.setStyle(android.graphics.Paint.Style.FILL);p.setColor(Look.primary);canvas.drawRoundRect(track,r,r,p);p.setColor(Look.onPrimary);canvas.drawCircle(b.right-r,b.top+r,r-dp(4),p);}
+            else{p.setStyle(android.graphics.Paint.Style.STROKE);p.setStrokeWidth(stroke);p.setColor(Look.outline);canvas.drawRoundRect(track,r,r,p);p.setStyle(android.graphics.Paint.Style.FILL);canvas.drawCircle(b.left+r,b.top+r,r-dp(6),p);}}
+        @Override public void setAlpha(int alpha){p.setAlpha(alpha);}@Override public void setColorFilter(android.graphics.ColorFilter filter){p.setColorFilter(filter);}@Override public int getOpacity(){return android.graphics.PixelFormat.TRANSLUCENT;}
     }
     private void confirmSignOut(){
         if(!preview&&SIGN_OUT_ACTIVE.get()){title("Signing out…");label("Removing this watch’s sign-in and local Grok data.",13,SECONDARY);return;}
         title("Sign out?");label("Remove this watch’s Grok sign-in and local Grok data? Your Bots and chats stay in your Grok account.",13,SECONDARY);
         action("Cancel",()->{screen="settings";render();});gap(18);
-        Button signOut=action("Sign out",()->beginSignOut());signOut.setTextColor(RED);
+        Button signOut=action("Sign out",()->beginSignOut());signOut.setTextColor(Look.error);iconize(signOut,R.drawable.ic_m_logout,Look.error);
     }
     private void beginSignOut(){
         if(preview){screen="welcome";render();return;}
