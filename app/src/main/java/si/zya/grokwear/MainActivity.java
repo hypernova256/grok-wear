@@ -866,12 +866,14 @@ public final class MainActivity extends Activity {
         Button message=action("Message",()->composeMessage());message.setCompoundDrawablesRelativeWithIntrinsicBounds(new PencilGlyph(),null,null,null);message.setCompoundDrawablePadding(dp(6));
         message.setContentDescription("Send a text message to "+botName);message.setEnabled(!messageSending&&!botSelectionPending);
     }
+    static final CharSequence[] QUICK_REPLIES={"Yes","No","Thanks!","Tell me more","Remind me later","What’s new?"};
     private void composeMessage(){
         answering=null;
         if(preview){draftMessage=previewDraft(botName);screen="compose_review";render();return;}
         try{
             android.content.Intent input=androidx.wear.input.RemoteInputIntentHelper.createActionRemoteInputIntent();
-            android.app.RemoteInput field=new android.app.RemoteInput.Builder("message").setLabel("Message "+botName).build();
+            // Quick replies sit above the keyboard and dictation, as on a watch's messages app; a pick still goes to review.
+            android.app.RemoteInput field=new android.app.RemoteInput.Builder("message").setLabel("Message "+botName).setChoices(QUICK_REPLIES).setAllowFreeFormInput(true).build();
             androidx.wear.input.RemoteInputIntentHelper.putRemoteInputsExtra(input,java.util.Collections.singletonList(field));
             startActivityForResult(input,MESSAGE_INPUT);
         }catch(RuntimeException unavailable){draftMessage="";editDraft="";screen="compose_edit";render();}
