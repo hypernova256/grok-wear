@@ -29,6 +29,8 @@ public final class ReplyAlertService extends Service {
     private static final String WAITING="reply_wait",REPLIES="bot_replies",OLD_REPLIES="replies";
     private static final int NOTIFICATION=7,REPLY=8;
     static final String OPEN_BOT="open_bot";
+    // A reply notice's actions: Reply (the watch's own input, with quick replies, then the app's review screen) and Talk.
+    static final String REPLY_INPUT="message",TALK_BOT="talk_bot";
     /** The Settings switch. On unless turned off; Android's notification permission is asked for separately. */
     static boolean enabled(Context context){try{return context.getSharedPreferences("grokwear_ui",MODE_PRIVATE).getBoolean("reply_alerts",true);}catch(RuntimeException unavailable){return true;}}
     static void setEnabled(Context context,boolean on){try{context.getSharedPreferences("grokwear_ui",MODE_PRIVATE).edit().putBoolean("reply_alerts",on).apply();}catch(RuntimeException ignored){}}
@@ -67,6 +69,20 @@ public final class ReplyAlertService extends Service {
     }
     /** Posts a Bot's reply; tapping it starts open (MainActivity) for that Bot. Also used by the debug preview. */
     static void notifyReply(Context context,String botId,String name,String text,Intent open){post(context,botId,name,text,"New reply",open);}
+    /** Reply and Talk on a Bot's notice, as on a watch's messages app. Each opens the app on that Bot; nothing is sent from here. */
+    private static NotificationCompat.Action[] actions(Context context,String botId,String name,Intent open){
+        String who=name==null||name.isEmpty()?"your Bot":name;
+        // Mutable so the watch's input screen can fill in the typed reply; the intent names its activity, so only extras change.
+        PendingIntent reply=PendingIntent.getActivity(context,("reply:"+botId).hashCode(),new Intent(open).setAction("reply:"+botId).putExtra(OPEN_BOT,botId)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_SINGLE_TOP),PendingIntent.FLAG_MUTABLE|PendingIntent.FLAG_UPDATE_CURRENT);
+        androidx.core.app.RemoteInput input=new androidx.core.app.RemoteInput.Builder(REPLY_INPUT).setLabel("Reply to "+who).setChoices(MainActivity.QUICK_REPLIES).setAllowFreeFormInput(true).build();
+        PendingIntent talk=PendingIntent.getActivity(context,("talk:"+botId).hashCode(),new Intent(open).setAction("talk:"+botId).putExtra(OPEN_BOT,botId).putExtra(TALK_BOT,true)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_SINGLE_TOP),PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT);
+        return new NotificationCompat.Action[]{
+            new NotificationCompat.Action.Builder(R.drawable.ic_m_chat,"Reply",reply).addRemoteInput(input).setAllowGeneratedReplies(false)
+                .setSemanticAction(NotificationCompat.Action.SEMANTIC_ACTION_REPLY).setShowsUserInterface(true).build(),
+            new NotificationCompat.Action.Builder(R.drawable.ic_m_mic,"Talk",talk).setShowsUserInterface(true).build()};
+    }
     /** The Bot's notice, with name as its title; hidden is all the lock screen shows. */
     private static void post(Context context,String botId,String name,String text,String hidden,Intent open){
         NotificationManager manager=context.getSystemService(NotificationManager.class);if(manager==null)return;
@@ -78,10 +94,12 @@ public final class ReplyAlertService extends Service {
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_SINGLE_TOP),PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT);
         // The lock screen shows that something came, not what it says.
         Notification neutral=new NotificationCompat.Builder(context,REPLIES).setSmallIcon(R.drawable.ic_reply_status).setContentTitle("Grok Wear").setContentText(hidden).build();
+        NotificationCompat.Action[] act=actions(context,botId,name,open);
         manager.notify(tag(botId),REPLY,new NotificationCompat.Builder(context,REPLIES).setSmallIcon(R.drawable.ic_reply_status)
             .setContentTitle(name).setContentText(text).setStyle(new NotificationCompat.BigTextStyle().bigText(text))
             .setCategory(NotificationCompat.CATEGORY_MESSAGE).setPriority(NotificationCompat.PRIORITY_HIGH).setDefaults(Notification.DEFAULT_ALL)
-            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE).setPublicVersion(neutral).setContentIntent(tap).setAutoCancel(true).build());
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE).setPublicVersion(neutral).setContentIntent(tap).setAutoCancel(true)
+            .addAction(act[0]).addAction(act[1]).build());
     }
 
     private final Handler main=new Handler(Looper.getMainLooper());

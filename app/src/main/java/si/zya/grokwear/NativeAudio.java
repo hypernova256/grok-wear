@@ -70,6 +70,17 @@ final class NativeAudio implements AutoCloseable {
     /** Settings → Silent replies: captions only, the Bot's voice muted on the watch. */
     static boolean silentReplies(Context context){try{return context.getSharedPreferences("grokwear_ui",Context.MODE_PRIVATE).getBoolean("silent_replies",false);}catch(RuntimeException unavailable){return false;}}
     static void setSilentReplies(Context context,boolean on){try{context.getSharedPreferences("grokwear_ui",Context.MODE_PRIVATE).edit().putBoolean("silent_replies",on).apply();}catch(RuntimeException ignored){}}
+    /** Settings → Match watch sound: replies are silent too while the watch's own sound is off (vibrate or mute). On by default. */
+    static boolean followWatchSound(Context context){try{return context.getSharedPreferences("grokwear_ui",Context.MODE_PRIVATE).getBoolean("follow_watch_sound",true);}catch(RuntimeException unavailable){return true;}}
+    static void setFollowWatchSound(Context context,boolean on){try{context.getSharedPreferences("grokwear_ui",Context.MODE_PRIVATE).edit().putBoolean("follow_watch_sound",on).apply();}catch(RuntimeException ignored){}}
+    /** The watch's sound toggle (quick settings): vibrate and mute both count as off. */
+    static boolean watchSoundOff(Context context){
+        try{AudioManager m=context.getSystemService(AudioManager.class);return m!=null&&m.getRingerMode()!=AudioManager.RINGER_MODE_NORMAL;}catch(RuntimeException unknown){return false;}}
+    static boolean repliesSilent(boolean always,boolean follow,boolean soundOff){return always||(follow&&soundOff);}
+    static boolean repliesSilent(Context context){return repliesSilent(silentReplies(context),followWatchSound(context),watchSoundOff(context));}
+    private android.content.BroadcastReceiver soundToggle;
+    private void applySilence(){AudioTrack t=track;if(t==null||closed.get())return;boolean silent=repliesSilent(context);
+        try{t.setVolume(silent?0f:1f);}catch(RuntimeException ignored){}android.util.Log.i("GrokWearAudio","voice_output="+(silent?"silent":media?"media":"call"));}
     NativeAudio(Context context,Listener listener){this.context=context.getApplicationContext();this.manager=(AudioManager)context.getSystemService(Context.AUDIO_SERVICE);this.listener=listener;}
     void start(boolean initiallyMuted) {
         synchronized(this){userMuted=initiallyMuted;}captureGate.mute(initiallyMuted);
@@ -104,9 +115,13 @@ final class NativeAudio implements AutoCloseable {
             AudioAttributes voice=media?new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build():attributes;
             track=new AudioTrack.Builder().setAudioAttributes(voice).setAudioFormat(format).setTransferMode(AudioTrack.MODE_STREAM).setBufferSizeInBytes(out).build();
             if(track.getState()!=AudioTrack.STATE_INITIALIZED)throw new IllegalStateException();
-            // Silent replies (Settings): the Bot's voice still streams and plays, so turn-taking and what Grok
-            // thinks you heard stay right, but at zero volume; the call shows its captions instead.
-            if(silentReplies(context)){track.setVolume(0f);android.util.Log.i("GrokWearAudio","voice_output=silent");}
+            // Silent replies (Settings, or the watch's sound off): the Bot's voice still streams and plays, so turn-taking
+            // and what Grok thinks you heard stay right, but at zero volume; the call shows its captions instead.
+            // Flipping the watch's sound toggle mid-call takes effect at once.
+            if(repliesSilent(context))applySilence();
+            soundToggle=new android.content.BroadcastReceiver(){@Override public void onReceive(Context c,android.content.Intent i){applySilence();}};
+            android.content.IntentFilter ringer=new android.content.IntentFilter(AudioManager.RINGER_MODE_CHANGED_ACTION);
+            if(android.os.Build.VERSION.SDK_INT>=33)context.registerReceiver(soundToggle,ringer,Context.RECEIVER_NOT_EXPORTED);else context.registerReceiver(soundToggle,ringer);
             int in=Math.max(FRAME*4,AudioRecord.getMinBufferSize(RATE,AudioFormat.CHANNEL_IN_MONO,AudioFormat.ENCODING_PCM_16BIT));
             record=new AudioRecord.Builder().setAudioSource(MediaRecorder.AudioSource.VOICE_COMMUNICATION)
                 .setAudioFormat(new AudioFormat.Builder().setEncoding(AudioFormat.ENCODING_PCM_16BIT).setSampleRate(RATE).setChannelMask(AudioFormat.CHANNEL_IN_MONO).build())
@@ -200,5 +215,6 @@ final class NativeAudio implements AutoCloseable {
         if(android.os.Build.VERSION.SDK_INT>=31){if(routes!=null)try{manager.unregisterAudioDeviceCallback(routes);}catch(Exception ignored){}if(routed)try{manager.clearCommunicationDevice();}catch(Exception ignored){}}
         if(changedMode)try{if(manager.getMode()==AudioManager.MODE_IN_COMMUNICATION)manager.setMode(oldMode);}catch(Exception ignored){}
         if(focusHeld)try{manager.abandonAudioFocusRequest(focus);}catch(Exception ignored){}
+        if(soundToggle!=null){try{context.unregisterReceiver(soundToggle);}catch(Exception ignored){}soundToggle=null;}
     }
 }

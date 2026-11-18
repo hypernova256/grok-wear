@@ -40,4 +40,8 @@ final class EdgeScale {
             if(Math.abs(row.getScaleX()-s)>.002f){row.setPivotX(row.getWidth()/2f);row.setPivotY(row.getHeight()/2f);row.setScaleX(s);row.setScaleY(s);}
         }
     }
+    // The bottom action's pill, in dp: its height, its gap above the screen's edge, and the room kept clear at its corners.
+    static final int EDGE_H=52,EDGE_GAP=16,EDGE_CLEAR=6;
+    /** The widest pill of height h whose bottom sits gap above a round screen's edge, with its corners clear inside it. */
+    static float edgeWidth(float radius,float h,float gap,float clear){float r=h/2,a=radius-clear-r,b=radius-gap-r;return a<=0||b<0||a<=b?h:2*((float)Math.sqrt(a*a-b*b)+r);}
 }
