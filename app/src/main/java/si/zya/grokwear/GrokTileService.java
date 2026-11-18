@@ -29,7 +29,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * The Tile beside the watch face: Talk to the Primary Bot, open a pinned one, or the whole list. It reads only the
+ * The Tile beside the watch face (and, through refresh, the complication): Talk to the Primary Bot, open a pinned one, or the whole list. It reads only the
  * roster the app already saved on the watch, never the network, so it shows what the app last saw; the app asks
  * for a redraw when that changes.
  */
@@ -42,7 +42,9 @@ public final class GrokTileService extends TileService {
     private static final ExecutorService READ=Executors.newSingleThreadExecutor(r->{Thread t=new Thread(r,"grok-tile");t.setDaemon(true);return t;});
 
     /** The app's roster or pins changed: redraw the Tile if it's on the watch. */
-    static void refresh(Context context){try{getUpdater(context).requestUpdate(GrokTileService.class);}catch(RuntimeException ignored){}}
+    static void refresh(Context context){try{getUpdater(context).requestUpdate(GrokTileService.class);}catch(RuntimeException ignored){}
+        // The complication shows the same Primary Bot.
+        try{androidx.wear.watchface.complications.datasource.ComplicationDataSourceUpdateRequester.create(context,new android.content.ComponentName(context,GrokComplicationService.class)).requestUpdateAll();}catch(RuntimeException ignored){}}
 
     /** {signedIn, primary?:{id,name}, pinned:[{id,name}]} from the saved roster ({present, bots, preferences}). */
     static JSONObject pick(JSONObject roster)throws Exception{
