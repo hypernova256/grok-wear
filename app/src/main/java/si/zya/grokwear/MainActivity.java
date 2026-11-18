@@ -198,7 +198,9 @@ public final class MainActivity extends Activity {
     /** The assistant button, through GrokAssistantSessionService: a call with the main Bot after the account loads. */
     private void noteAssist(Intent intent){
         String action=intent==null?null:intent.getAction();
-        if(!Intent.ACTION_ASSIST.equals(action)&&!"android.intent.action.VOICE_ASSIST".equals(action))return;
+        // The Tile's Talk chip can't set an action, so it says so in an extra.
+        boolean tile=intent!=null&&intent.getBooleanExtra(GrokTileService.TALK,false);
+        if(!tile&&!Intent.ACTION_ASSIST.equals(action)&&!"android.intent.action.VOICE_ASSIST".equals(action))return;
         pendingAssist=true;pendingOpenBot="";
     }
     /** The assistant button: talk to the main Bot, switching to it first when another Bot is open. */
@@ -644,7 +646,7 @@ public final class MainActivity extends Activity {
         });
     }
     private void pinSaved(int request,String id,boolean pin,JSONObject prefs){
-        botPreferences=prefs;if(pinsFullAt>=0&&pinIds().length()<pinsFullAt)pinsFullAt=-1;
+        botPreferences=prefs;GrokTileService.refresh(this);if(pinsFullAt>=0&&pinIds().length()<pinsFullAt)pinsFullAt=-1;
         if(request!=pinRequest){rerenderPins();return;}
         pinSavingId="";pinErrorId="";if(pin){markPinHintDone();justPinnedId=id;pinFadeId=id;}
         if(root!=null)root.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM);
@@ -1865,7 +1867,7 @@ public final class MainActivity extends Activity {
         if(VoiceService.snapshot().active){renderVoice();return false;}
         return true;
     }
-    private void clearBotCache(){cancelRosterRetry();preferencesKnown=false;pickToCall=false;rosterRetryUsed=false;clearPendingTalk();receiptIdentity="";receiptSync="";receiptElapsed=0;receiptRefreshPending=false;clearHistory();botRequest++;botsLoading=false;rosterFetchActive=false;activeRosterRequest=0;bots=new JSONArray();botPreferences=new JSONObject();botsCached=false;botsFetchedAtMs=0;lastBotRefreshAttemptElapsed=0;botsAccountBinding="";selectedMetadata=new JSONObject();botName="Your Bot";}
+    private void clearBotCache(){cancelRosterRetry();preferencesKnown=false;pickToCall=false;rosterRetryUsed=false;clearPendingTalk();receiptIdentity="";receiptSync="";receiptElapsed=0;receiptRefreshPending=false;clearHistory();botRequest++;botsLoading=false;rosterFetchActive=false;activeRosterRequest=0;bots=new JSONArray();botPreferences=new JSONObject();botsCached=false;botsFetchedAtMs=0;lastBotRefreshAttemptElapsed=0;botsAccountBinding="";selectedMetadata=new JSONObject();botName="Your Bot";GrokTileService.refresh(this);}
     private void acceptAccountBot(JSONObject bot){
         // A resumed detail belongs to its captured account, Bot and viewer conversation.
         String session=bot.optBoolean("viewerIsOwner",true)?"":bot.optString("viewerSessionId","");
@@ -1963,14 +1965,14 @@ public final class MainActivity extends Activity {
     private void applyBotRefresh(int request,String expected,JSONArray found){
         if(!currentBotRefresh(request,expected))return;
         boolean changed=!botsCached||!bots.toString().equals(found.toString())||!botListError.isEmpty();
-        cancelRosterRetry();bots=found;botsCached=true;botsFetchedAtMs=System.currentTimeMillis();botsLoading=false;botListError="";
+        cancelRosterRetry();bots=found;botsCached=true;botsFetchedAtMs=System.currentTimeMillis();botsLoading=false;botListError="";if(changed)GrokTileService.refresh(this);
         if(changed||refreshShown)renderBotListPreservingScroll();refreshShown=false;
     }
     /** A refresh someone asked for: its end redraws the list even when nothing changed, to show "Updated just now". */
     private boolean refreshShown;
     private void applyBotPreferences(int request,String expected,JSONObject prefs){
         if(!currentBotRefresh(request,expected))return;
-        boolean changed=!botPreferences.toString().equals(prefs.toString())||!preferencesKnown;botPreferences=prefs;preferencesKnown=true;
+        boolean changed=!botPreferences.toString().equals(prefs.toString())||!preferencesKnown;botPreferences=prefs;preferencesKnown=true;if(changed)GrokTileService.refresh(this);
         if(changed)renderBotListPreservingScroll();
     }
     /** why: a status or error type, shown so a screenshot of a stuck list says what failed. */

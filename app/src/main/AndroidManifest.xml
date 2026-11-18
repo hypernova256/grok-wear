@@ -20,6 +20,11 @@
         <activity-alias android:name=".AssistActivity" android:targetActivity=".MainActivity" android:exported="true" android:label="Grok Wear">
             <intent-filter><action android:name="android.intent.action.ASSIST"/><action android:name="android.intent.action.VOICE_ASSIST"/><category android:name="android.intent.category.DEFAULT"/></intent-filter>
         </activity-alias>
+        <!-- The Tile beside the watch face: talk to the Primary Bot, open a pinned one. -->
+        <service android:name=".GrokTileService" android:exported="true" android:label="Grok Bot" android:icon="@drawable/ic_tile_mic" android:permission="com.google.android.wearable.permission.BIND_TILE_PROVIDER">
+            <intent-filter><action android:name="androidx.wear.tiles.action.BIND_TILE_PROVIDER" /></intent-filter>
+            <meta-data android:name="androidx.wear.tiles.PREVIEW" android:resource="@drawable/tile_preview" />
+        </service>
         <service android:name=".VoiceService" android:exported="false" android:foregroundServiceType="microphone|mediaPlayback" />
         <service android:name=".ReplyAlertService" android:exported="false" android:foregroundServiceType="dataSync" />
         <!-- Bound by Android only while Grok Wear is the digital assistant. -->

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Tile picker's picture of the Grok Bot Tile: Talk, two pinned Bots, All Bots. No real Bot names. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="192dp" android:height="192dp" android:viewportWidth="408" android:viewportHeight="408">
+ <path android:fillColor="#000000" android:pathData="M204,0a204,204 0,1 1,0 408a204,204 0,1 1,0 -408z"/>
+ <path android:fillColor="#8D8D93" android:pathData="M176,76h56a6,6 0,0 1,0 12h-56a6,6 0,0 1,0 -12z"/>
+ <path android:fillColor="#006CEB" android:pathData="M78,101h252a52,52 0,0 1,0 104h-252a52,52 0,0 1,0 -104z"/>
+ <path android:fillColor="#FFFFFF" android:pathData="M126,141h120a8,8 0,0 1,0 16h-120a8,8 0,0 1,0 -16zM126,165h70a6,6 0,0 1,0 12h-70a6,6 0,0 1,0 -12z"/>
+ <path android:fillColor="#FFFFFF" android:pathData="M78,169c3.3,0 6,-2.7 6,-6v-12c0,-3.3 -2.7,-6 -6,-6s-6,2.7 -6,6v12c0,3.3 2.7,6 6,6zM88.6,163c0,6 -5.1,10.2 -10.6,10.2s-10.6,-4.2 -10.6,-10.2h-3.4c0,6.8 5.4,12.5 12,13.4v6.6h4v-6.6c6.6,-1 12,-6.6 12,-13.4z"/>
+ <path android:fillColor="#2C2C2E" android:pathData="M81,228h110a32,32 0,0 1,0 64h-110a32,32 0,0 1,0 -64zM263,228h64a32,32 0,0 1,0 64h-64a32,32 0,0 1,0 -64z"/>
+ <path android:fillColor="#2C2C2E" android:pathData="M162,320h84a32,32 0,0 1,0 64h-84a32,32 0,0 1,0 -64z"/>
+ <path android:fillColor="#FFFFFF" android:pathData="M90,254h92a6,6 0,0 1,0 12h-92a6,6 0,0 1,0 -12zM265,254h60a6,6 0,0 1,0 12h-60a6,6 0,0 1,0 -12zM166,346h76a6,6 0,0 1,0 12h-76a6,6 0,0 1,0 -12z"/>
+</vector>
